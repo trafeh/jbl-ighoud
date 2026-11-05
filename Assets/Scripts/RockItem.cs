@@ -3,9 +3,30 @@ using UnityEngine;
 public class RockItem : MonoBehaviour
 {
     [Header("Rock Attributes")]
-    [Range(1f, 10f)]
-    [Tooltip("Strength/Force of the rock. Under 5: destroys in 1 hit. 5-10: needs multiple hits.")]
+    [Range(1f, 20f)]
+    [Tooltip("Strength/Hardness value (1-5: Very Soft, 5-10: Soft/Brittle, 10-15: Hard/Abrasive, 15-20: Tool Core/Flint).")]
     public float strength = 3f;
+
+    [Header("Inventory & Weight Settings")]
+    [Tooltip("Weight in kg. If set to 0 or left unconfigured, automatically synchronizes with rockData.mass.")]
+    [SerializeField] private float weight = 0f;
+
+    public float Weight
+    {
+        get => GetWeight();
+        set => weight = value;
+    }
+
+    public float GetWeight()
+    {
+        if (weight > 0.001f) return weight;
+        if (rockData != null && rockData.mass > 0.001f) return rockData.mass;
+        return 1.2f;
+    }
+
+    [Header("Prehistoric Lithic Data (Jbel Ighoud)")]
+    [Tooltip("Optional RockData ScriptableObject defining authentic prehistoric rock properties.")]
+    public JbelIghoud.Lithic.RockData rockData;
 
     [Tooltip("Minimum relative collision speed to count as a hard hit.")]
     [SerializeField] private float hardHitSpeed = 2.5f;
@@ -42,31 +63,96 @@ public class RockItem : MonoBehaviour
 
     private void Awake()
     {
-        rockRenderer = GetComponent<Renderer>();
-        if (rockRenderer != null)
+        ApplyRockData();
+        SetupDurability();
+        CacheColliders();
+        RemoveLegacyLabelsAndGlow();
+        lastPosition = transform.position;
+    }
+
+    private void RemoveLegacyLabelsAndGlow()
+    {
+        Transform label = transform.Find("RockLabel");
+        if (label != null)
         {
-            originalColor = rockRenderer.material.color;
+            if (Application.isPlaying) Destroy(label.gameObject);
+            else DestroyImmediate(label.gameObject);
         }
 
-        SetupDurability();
-        CreateFloatingLabel();
-        lastPosition = transform.position;
+        var glow = GetComponent<DistantInteractableGlow>();
+        if (glow != null)
+        {
+            if (Application.isPlaying) Destroy(glow);
+            else DestroyImmediate(glow);
+        }
+    }
+
+    public void ApplyRockData()
+    {
+        if (rockData != null)
+        {
+            if (rockData.rockMesh != null)
+            {
+                MeshFilter mf = GetComponent<MeshFilter>();
+                if (mf == null) mf = gameObject.AddComponent<MeshFilter>();
+                if (mf.sharedMesh != rockData.rockMesh)
+                {
+                    mf.sharedMesh = rockData.rockMesh;
+                }
+
+                SphereCollider sc = GetComponent<SphereCollider>();
+                if (sc != null)
+                {
+                    DestroyImmediate(sc);
+                }
+                MeshCollider mc = GetComponent<MeshCollider>();
+                if (mc == null) mc = gameObject.AddComponent<MeshCollider>();
+                mc.sharedMesh = rockData.rockMesh;
+                mc.convex = true;
+            }
+
+            rockRenderer = GetComponent<Renderer>();
+            if (rockRenderer != null)
+            {
+                if (rockData.rockMaterial != null) rockRenderer.sharedMaterial = rockData.rockMaterial;
+                else if (Application.isPlaying)
+                {
+                    rockRenderer.material.color = rockData.rockColor;
+                    originalColor = rockRenderer.material.color;
+                }
+            }
+
+            if (weight <= 0.001f && rockData.mass > 0f)
+            {
+                weight = rockData.mass;
+            }
+        }
     }
 
     private void Start()
     {
+        ApplyRockData();
         SetupDurability();
         UpdateLabel();
     }
 
     private void OnValidate()
     {
+        ApplyRockData();
         SetupDurability();
         UpdateLabel();
     }
 
     public void SetupDurability()
     {
+        if (rockData != null)
+        {
+            strength = rockData.hardness;
+            maxHits = rockData.baseDurability;
+            currentHits = maxHits;
+            return;
+        }
+
         // Under 5: destroys in 1 hit. 5-10: needs 2 hits to destroy.
         maxHits = strength < 5f ? 1 : 2;
         currentHits = maxHits;
@@ -77,37 +163,19 @@ public class RockItem : MonoBehaviour
         Transform existing = transform.Find("RockLabel");
         if (existing != null)
         {
-            labelTextMesh = existing.GetComponent<TextMesh>();
+            if (Application.isPlaying) Destroy(existing.gameObject);
+            else DestroyImmediate(existing.gameObject);
         }
-        else
-        {
-            GameObject textObj = new GameObject("RockLabel");
-            textObj.transform.SetParent(transform);
-            textObj.transform.localPosition = new Vector3(0f, 1.3f, 0f);
-
-            labelTextMesh = textObj.AddComponent<TextMesh>();
-            labelTextMesh.alignment = TextAlignment.Center;
-            labelTextMesh.anchor = TextAnchor.MiddleCenter;
-            labelTextMesh.characterSize = 0.12f;
-            labelTextMesh.fontSize = 36;
-            labelTextMesh.fontStyle = FontStyle.Bold;
-        }
-
-        UpdateLabel();
     }
 
     public void UpdateLabel()
     {
-        if (labelTextMesh == null)
+        Transform existing = transform.Find("RockLabel");
+        if (existing != null)
         {
-            Transform existing = transform.Find("RockLabel");
-            if (existing != null) labelTextMesh = existing.GetComponent<TextMesh>();
+            if (Application.isPlaying) Destroy(existing.gameObject);
+            else DestroyImmediate(existing.gameObject);
         }
-        if (labelTextMesh == null) return;
-
-        string strengthCategory = strength < 5f ? "< 5 (Weak)" : "5-10 (Strong)";
-        labelTextMesh.text = $"STR: {strength:F1} | {strengthCategory}\nHP: {currentHits}/{maxHits}";
-        labelTextMesh.color = strength < 5f ? new Color(1f, 0.45f, 0.35f) : new Color(0.35f, 0.95f, 0.55f);
     }
 
     private void LateUpdate()
@@ -124,21 +192,112 @@ public class RockItem : MonoBehaviour
         lastPosition = transform.position;
     }
 
+    private Collider[] rockColliders;
+    private bool[] originalTriggerStates;
+
+    public void CacheColliders()
+    {
+        if (rockColliders == null || rockColliders.Length == 0)
+        {
+            rockColliders = GetComponentsInChildren<Collider>();
+            originalTriggerStates = new bool[rockColliders.Length];
+            for (int i = 0; i < rockColliders.Length; i++)
+            {
+                if (rockColliders[i] != null)
+                {
+                    originalTriggerStates[i] = rockColliders[i].isTrigger;
+                }
+            }
+        }
+    }
+
     public void SetHeld(TopDownPlayerController player, int slotIndex)
     {
         isHeld = true;
         holdingPlayer = player;
         heldSlotIndex = slotIndex;
 
+        CacheColliders();
+
+        // Ensure Rigidbody exists so this object is NEVER treated as a moving static collider!
         Rigidbody rb = GetComponent<Rigidbody>();
-        if (rb != null)
+        if (rb == null)
         {
-            rb.isKinematic = true;
+            rb = gameObject.AddComponent<Rigidbody>();
+        }
+#if UNITY_6000_0_OR_NEWER
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+#else
+        rb.velocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+#endif
+        rb.isKinematic = true;
+        rb.detectCollisions = false;
+
+        // Convert rock colliders to triggers and ignore all collisions with player colliders
+        Collider[] playerColliders = player != null ? player.GetComponentsInChildren<Collider>() : null;
+
+        for (int i = 0; i < rockColliders.Length; i++)
+        {
+            if (rockColliders[i] == null) continue;
+            rockColliders[i].isTrigger = true;
+
+            if (playerColliders != null)
+            {
+                for (int j = 0; j < playerColliders.Length; j++)
+                {
+                    if (playerColliders[j] != null)
+                    {
+                        Physics.IgnoreCollision(rockColliders[i], playerColliders[j], true);
+                    }
+                }
+            }
+        }
+
+        // Sync with Lithic Rock component if attached
+        JbelIghoud.Lithic.Rock lithicRock = GetComponent<JbelIghoud.Lithic.Rock>();
+        if (lithicRock != null)
+        {
+            lithicRock.SetHeld(true, player != null ? player.gameObject : null);
         }
     }
 
     public void ReleaseHeld()
     {
+        CacheColliders();
+
+        // Restore collision ignore with player
+        if (holdingPlayer != null && rockColliders != null)
+        {
+            Collider[] playerColliders = holdingPlayer.GetComponentsInChildren<Collider>();
+            for (int i = 0; i < rockColliders.Length; i++)
+            {
+                if (rockColliders[i] != null && playerColliders != null)
+                {
+                    for (int j = 0; j < playerColliders.Length; j++)
+                    {
+                        if (playerColliders[j] != null)
+                        {
+                            Physics.IgnoreCollision(rockColliders[i], playerColliders[j], false);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Unconditionally restore solid collision on release
+        if (rockColliders != null)
+        {
+            for (int i = 0; i < rockColliders.Length; i++)
+            {
+                if (rockColliders[i] != null)
+                {
+                    rockColliders[i].isTrigger = false;
+                }
+            }
+        }
+
         isHeld = false;
         holdingPlayer = null;
         heldSlotIndex = -1;
@@ -149,6 +308,13 @@ public class RockItem : MonoBehaviour
         if (rb != null)
         {
             rb.isKinematic = false;
+            rb.detectCollisions = true;
+        }
+
+        JbelIghoud.Lithic.Rock lithicRock = GetComponent<JbelIghoud.Lithic.Rock>();
+        if (lithicRock != null)
+        {
+            lithicRock.SetHeld(false);
         }
     }
 
@@ -184,18 +350,38 @@ public class RockItem : MonoBehaviour
         lastHitTimestamp = Time.time;
         otherRock.lastHitTimestamp = Time.time;
 
-        SpawnHitEffect((transform.position + otherRock.transform.position) * 0.5f);
+        Vector3 contactMid = (transform.position + otherRock.transform.position) * 0.5f;
+        SpawnHitEffect(contactMid);
 
-        // Apply hit to both rocks according to strength rules:
-        // - Under 5: destroyed in 1 hit
-        // - 5-10: needs more than 1 hit to destroy
+        // Prehistoric Lithic Matrix Evaluation if RockData is attached
+        var matrix = Resources.Load<JbelIghoud.Lithic.RockInteractionMatrix>("DefaultRockInteractionMatrix");
+        if (matrix != null && (rockData != null || otherRock.rockData != null))
+        {
+            RockItem striker = currentVelocity.sqrMagnitude >= otherRock.Velocity.sqrMagnitude ? this : otherRock;
+            RockItem receiver = striker == this ? otherRock : this;
+
+            var result = matrix.ResolveCollision(striker.rockData, receiver.rockData, impactSpeed);
+            if (result.outcomeType != JbelIghoud.Lithic.InteractionOutcomeType.NoEffect)
+            {
+                if (result.spawnedYieldPrefab != null)
+                {
+                    Instantiate(result.spawnedYieldPrefab, contactMid + Vector3.up * 0.15f, Quaternion.identity);
+                }
+
+                if (result.damageToStriker > 0) striker.TakeHit(result.damageToStriker);
+                if (result.damageToReceiver > 0) receiver.TakeHit(result.damageToReceiver);
+                return;
+            }
+        }
+
+        // Fallback default hit
         this.TakeHit();
         otherRock.TakeHit();
     }
 
-    public void TakeHit()
+    public void TakeHit(int damage = 1)
     {
-        currentHits--;
+        currentHits = Mathf.Max(0, currentHits - damage);
         UpdateLabel();
 
         // Flash red
@@ -219,9 +405,13 @@ public class RockItem : MonoBehaviour
         }
     }
 
+    public System.Action<RockItem> OnRockDestroyedEvent;
+
     public void DestroyRock()
     {
         SpawnDestructionEffect();
+
+        OnRockDestroyedEvent?.Invoke(this);
 
         if (holdingPlayer != null)
         {

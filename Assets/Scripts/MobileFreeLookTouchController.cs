@@ -17,23 +17,26 @@ public class MobileFreeLookTouchController : MonoBehaviour
     [Tooltip("Vertical orbit sensitivity.")]
     [SerializeField] private float sensitivityY = 0.15f;
 
+    [Tooltip("Look smoothing speed for fluid swipe rotation.")]
+    [SerializeField] private float lookSmoothing = 28f;
+
     [Tooltip("Invert vertical look axis.")]
     [SerializeField] private bool invertY = false;
 
     [Header("Touch Screen Zone")]
     [Tooltip("Minimum normalized X screen position to allow touch look (0.5 means right half of screen strictly, leaving left half 100% free for joystick).")]
     [Range(0.3f, 0.7f)]
-    [SerializeField] private float minTouchScreenX = 0.50f;
+    [SerializeField] private float minTouchScreenX = 0.45f;
 
     [Header("Auto Follow Settings")]
-    [Tooltip("Enable auto-follow camera to align behind player when moving without camera touch.")]
-    [SerializeField] private bool autoAlignEnabled = true;
+    [Tooltip("Enable auto-follow camera to align behind player when moving without camera touch. Disabled for Free Fire style camera freedom.")]
+    [SerializeField] private bool autoAlignEnabled = false;
 
     [Tooltip("Delay in seconds without manual camera touch before auto-align activates.")]
-    [SerializeField] private float autoActivateDelay = 0.75f;
+    [SerializeField] private float autoActivateDelay = 2.5f;
 
     [Tooltip("Speed in degrees per second at which the camera rotates behind the player.")]
-    [SerializeField] private float alignSpeed = 110f;
+    [SerializeField] private float alignSpeed = 45f;
 
     [Tooltip("Minimum angle difference between camera and player forward to trigger auto-alignment.")]
     [SerializeField] private float minTriggerAngle = 15f;
@@ -95,9 +98,13 @@ public class MobileFreeLookTouchController : MonoBehaviour
         EnhancedTouchSupport.Disable();
     }
 
+    [Header("Control Override")]
+    public bool isInputDisabled = false;
+
     private void Update()
     {
-        if (orbitalFollow == null) return;
+        if (isInputDisabled || orbitalFollow == null) return;
+        if (RockDragManager.Instance != null && RockDragManager.Instance.IsInSmashMode) return;
 
         FindPlayerReference();
         HandleTouchInput();

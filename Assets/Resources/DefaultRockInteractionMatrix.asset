@@ -1,0 +1,85 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: adbc5a3f043c7e1448643dd9b7858633, type: 3}
+  m_Name: DefaultRockInteractionMatrix
+  m_EditorClassIdentifier: Assembly-CSharp::JbelIghoud.Lithic.RockInteractionMatrix
+  minimumHitForce: 2
+  hardShatterForce: 6.5
+  recipes:
+  - recipeName: Levallois Knapping (Rock 2 Gres + Rock 1 Silex)
+    strikerType: 1
+    receiverType: 0
+    minImpactForce: 2.5
+    outcome: 1
+    damageToStriker: 0
+    damageToReceiver: 1
+    yieldPrefab: {fileID: 0}
+    vfxPrefab: {fileID: 0}
+    sfxClip: {fileID: 0}
+    feedbackText: Knapped a sharp Levallois blade from the Silex core!
+  - recipeName: Flint Knapping (Rock 1 Silex + Rock 1 Silex)
+    strikerType: 0
+    receiverType: 0
+    minImpactForce: 3
+    outcome: 1
+    damageToStriker: 1
+    damageToReceiver: 1
+    yieldPrefab: {fileID: 0}
+    vfxPrefab: {fileID: 0}
+    sfxClip: {fileID: 0}
+    feedbackText: Direct flint percussion produced sharp lithic flakes.
+  - recipeName: Flint Incision (Rock 1 Silex + Rock 3 Calcaire)
+    strikerType: 0
+    receiverType: 2
+    minImpactForce: 2
+    outcome: 2
+    damageToStriker: 0
+    damageToReceiver: 1
+    yieldPrefab: {fileID: 0}
+    vfxPrefab: {fileID: 0}
+    sfxClip: {fileID: 0}
+    feedbackText: Flint sliced into limestone, generating fine white chalk residue.
+  - recipeName: Limestone Crushing (Rock 2 Gres + Rock 3 Calcaire)
+    strikerType: 1
+    receiverType: 2
+    minImpactForce: 2.4
+    outcome: 2
+    damageToStriker: 0
+    damageToReceiver: 2
+    yieldPrefab: {fileID: 0}
+    vfxPrefab: {fileID: 0}
+    sfxClip: {fileID: 0}
+    feedbackText: Hard sandstone crushed soft limestone into powder.
+  - recipeName: Sandstone Abrasion (Rock 2 Gres + Rock 2 Gres)
+    strikerType: 1
+    receiverType: 1
+    minImpactForce: 2.2
+    outcome: 7
+    damageToStriker: 1
+    damageToReceiver: 1
+    yieldPrefab: {fileID: 0}
+    vfxPrefab: {fileID: 0}
+    sfxClip: {fileID: 0}
+    feedbackText: Abrasive sandstone friction ground the surfaces smooth.
+  - recipeName: Limestone Chalk Friction (Rock 3 Calcaire + Rock 3 Calcaire)
+    strikerType: 2
+    receiverType: 2
+    minImpactForce: 1.8
+    outcome: 2
+    damageToStriker: 1
+    damageToReceiver: 1
+    yieldPrefab: {fileID: 0}
+    vfxPrefab: {fileID: 0}
+    sfxClip: {fileID: 0}
+    feedbackText: Limestone blocks rubbed together, yielding chalky white powder.
+  useHardnessFallback: 1
+  highHardnessDelta: 4.5

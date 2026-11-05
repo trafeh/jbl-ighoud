@@ -1,0 +1,582 @@
+import os
+import subprocess
+import shutil
+
+html_content = """<!DOCTYPE html>
+<html lang="ar" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <title>DayNightSystem Inspector Guide - Darija</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 15mm 15mm 15mm 15mm;
+            @bottom-right {
+                content: counter(page);
+            }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #ffffff;
+            color: #1f242d;
+            line-height: 1.55;
+            font-size: 13px;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            background: linear-gradient(135deg, #181c24 0%, #2b3345 100%);
+            color: #ffffff;
+            padding: 24px 28px;
+            border-radius: 10px;
+            margin-bottom: 22px;
+            border-bottom: 4px solid #f59e0b;
+        }
+        .header h1 {
+            margin: 0 0 6px 0;
+            font-size: 24px;
+            letter-spacing: 0.5px;
+            color: #fcd34d;
+        }
+        .header .subtitle {
+            font-size: 14px;
+            color: #cbd5e1;
+            margin: 0;
+        }
+        .badge {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 20px;
+            margin-top: 8px;
+            text-transform: uppercase;
+        }
+        .badge.darija {
+            background: #10b981;
+        }
+        .badge.unity {
+            background: #6366f1;
+        }
+        h2 {
+            font-size: 17px;
+            color: #0f172a;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 6px;
+            margin-top: 24px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+        }
+        h2 .icon {
+            margin-right: 8px;
+            font-size: 18px;
+        }
+        .section-desc {
+            font-style: italic;
+            color: #475569;
+            margin-bottom: 12px;
+            font-size: 12.5px;
+        }
+        .card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid #3b82f6;
+            border-radius: 6px;
+            padding: 12px 14px;
+            margin-bottom: 11px;
+            page-break-inside: avoid;
+        }
+        .card.time {
+            border-left-color: #f59e0b;
+        }
+        .card.light {
+            border-left-color: #ef4444;
+        }
+        .card.blend {
+            border-left-color: #8b5cf6;
+        }
+        .card.cave {
+            border-left-color: #06b6d4;
+        }
+        .var-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .var-name {
+            font-family: Consolas, Monaco, monospace;
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #1e293b;
+            background: #e2e8f0;
+            padding: 2px 7px;
+            border-radius: 4px;
+        }
+        .var-type {
+            font-family: Consolas, Monaco, monospace;
+            font-size: 11.5px;
+            color: #64748b;
+        }
+        .var-desc {
+            margin: 5px 0 3px 0;
+            font-size: 12.8px;
+            color: #334155;
+        }
+        .darija-box {
+            background: #f0fdf4;
+            border: 1px dashed #86efac;
+            border-radius: 5px;
+            padding: 7px 10px;
+            margin-top: 6px;
+            font-size: 12.2px;
+            color: #14532d;
+        }
+        .darija-box strong {
+            color: #15803d;
+        }
+        .table-container {
+            margin-top: 15px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11.5px;
+        }
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 7px 9px;
+            text-align: left;
+        }
+        th {
+            background-color: #1e293b;
+            color: #ffffff;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background-color: #f1f5f9;
+        }
+        .tip-box {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-left: 4px solid #f59e0b;
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin: 16px 0;
+            font-size: 12.5px;
+            color: #92400e;
+            page-break-inside: avoid;
+        }
+        .page-break {
+            page-break-after: always;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 11px;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>☀️ DayNightSystem - Dalil L-Inspector b Darija</h1>
+        <p class="subtitle">Char7 mufassal l-koul option, variable, w bouton f l-Inspector dial Unity 6 (URP)</p>
+        <span class="badge darija">Moroccan Darija (Darija b l-7ourouf latiniya)</span>
+        <span class="badge unity">Unity 6 &bull; AllSkyFree 10 Skyboxes</span>
+    </div>
+
+    <div class="tip-box">
+        <strong>💡 Fikra 3amma:</strong> Had l-system msawwb bach idewwer nhar w lil (24 sa3a) b 10 dial les skyboxes AllSkyFree. L-l3ba katbda f <strong>07:00 AM (Sbah)</strong>, w sma katbeddel chwya b chwya (Smooth S-Curve) bla ma t-bloqa w bla ma twlli d-dnya kahla f marra!
+    </div>
+
+    <!-- SECTION 1 -->
+    <h2><span class="icon">🎮</span> 1. Controls l-foqaniyin (Header & Quick Jump Buttons)</h2>
+    <p class="section-desc">Hadou homa l-adawat li kat-chouf f ras l-Inspector bach t-testi l-waqt f Edit Mode bla ma t-l3ab:</p>
+
+    <div class="card time">
+        <div class="var-header">
+            <span class="var-name">Time (0h - 24h) Slider</span>
+            <span class="var-type">Slider (0.00 ➔ 24.00)</span>
+        </div>
+        <div class="var-desc">Slider dial l-waqt l-7ay f Unity Editor.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Jer had l-curseur b la souris f Edit Mode w ghat-chouf direct f Scene View sma, l-chams, d-dlam, w les couleurs kaytbeddlo f nafs l-waqt. Kaykhellik t-chouf ayy sa3a bghiti bla ma t-dir Play.
+        </div>
+    </div>
+
+    <div class="card time">
+        <div class="var-header">
+            <span class="var-name">Quick Jump Buttons (Les Boutons d Zerba)</span>
+            <span class="var-type">Inspector Buttons</span>
+        </div>
+        <div class="var-desc">8 dial les boutons li kay-naqzou direct l-awqat mohimma:</div>
+        <div class="darija-box">
+            &bull; <strong>07:00 (Start):</strong> Kayrd l-l3ba l 7:00 d sbah (l-bidaya dial l-game m3a sma zarqa w chams tal3a).<br>
+            &bull; <strong>10:00 (Day):</strong> Kayddik l sbah l-mtiyez (Overcast Low daylight).<br>
+            &bull; <strong>14:30 (Pink):</strong> Golden Afternoon (l-3chiya l-dhbiya m3a sma fiha l-werdi).<br>
+            &bull; <strong>17:00 (Sunset):</strong> L-maghrib (chams hamra w limouniya tal3a f l-ofsoq).<br>
+            &bull; <strong>19:30 (Dusk):</strong> Chafaq / Deep Dusk (l-violet w l-indigo).<br>
+            &bull; <strong>21:30 (Moon):</strong> L-lil m3a l-gmr (Moonlit Night b dow zreq fathi).<br>
+            &bull; <strong>00:00 (Mid):</strong> Nss l-lil (Cold Midnight starry sky).<br>
+            &bull; <strong>05:00 (Dawn):</strong> L-fjer l-fada'i (Pre-Dawn Cosmic sky).
+        </div>
+    </div>
+
+    <div class="card blend">
+        <div class="var-header">
+            <span class="var-name">⚡ Auto-Populate 10 AllSkyFree Skyboxes</span>
+            <span class="var-type">Action Button</span>
+        </div>
+        <div class="var-desc">Bouton d l-automatic setup dial ga3 l-10 Skyboxes.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Klik wahed 3lih kaymchi l dossier <code>Assets/AllSkyFree</code>, kayjbed ga3 l-10 materials Equirect w les textures Cubemaps, kayrttebhom b l-waqt dialhom (mn 6h d sbah tal l-lil), w kay3tihom les couleurs d chams w l-ambient bla ma t-3mmer chi 7aja b yddik.
+        </div>
+    </div>
+
+    <!-- SECTION 2 -->
+    <h2><span class="icon">⏰</span> 2. Time Settings (I3dadat L-Waqt)</h2>
+    <p class="section-desc">Hna kat-t7kkem f kifach l-waqt kaydouz w ch-hal kat-stghreq koul 24 sa3a:</p>
+
+    <div class="card time">
+        <div class="var-header">
+            <span class="var-name">Current Time</span>
+            <span class="var-type">float (Range 0.0 - 24.0)</span>
+        </div>
+        <div class="var-desc">L-waqt l-7ali f l-l3ba b l-a3dad l-3achriya.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Kay-stori sa3a d daba. Matlan <code>7.0</code> kat3ni 7:00 AM, <code>14.5</code> kat3ni 2:30 PM (14h30), w <code>21.75</code> kat3ni 9:45 PM. L-game mprogagrmé kaybda f <strong>7.0</strong> dima.
+        </div>
+    </div>
+
+    <div class="card time">
+        <div class="var-header">
+            <span class="var-name">Day Duration In Minutes</span>
+            <span class="var-type">float (Default: 5.0)</span>
+        </div>
+        <div class="var-desc">Ch-hal mn dqiqa f l-waqi3 (Real-world minutes) khassha bach idouz nhar kamel f l-l3ba.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Ila derti <code>5.0</code>, nhar kamel dial 24 sa3a f l-l3ba ghaydouz f 5 d-dqayeq dial besseh. Ila bghiti nhar itewwel, dir <code>10.0</code> (10 dqayeq) wlla <code>15.0</code>.
+        </div>
+    </div>
+
+    <div class="card time">
+        <div class="var-header">
+            <span class="var-name">Time Multiplier</span>
+            <span class="var-type">float (Default: 1.0)</span>
+        </div>
+        <div class="var-desc">Sor3a dial douz l-waqt (Fast-Forward).</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> <code>1.0</code> howa l-3adi. Ila bghiti t-zreb l-waqt f Play Mode bach tchouf l-ghroub w l-lil bzerba, dir <code>5.0</code> wlla <code>20.0</code>.
+        </div>
+    </div>
+
+    <div class="card time">
+        <div class="var-header">
+            <span class="var-name">Is Paused</span>
+            <span class="var-type">bool (Checkbox)</span>
+        </div>
+        <div class="var-desc">T-waqqaf l-waqt (Pause).</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Ila kochetiha, l-waqt kay-tbloqa f sa3a li raki fiha ma kaye-bqa-ch it7rrek, mziana ila bghiti t-focusi 3la chi mar7ala f l-l3ba.
+        </div>
+    </div>
+
+    <div class="card time">
+        <div class="var-header">
+            <span class="var-name">Current Day</span>
+            <span class="var-type">int (Default: 1)</span>
+        </div>
+        <div class="var-desc">Nemra dial nhar (Compteur).</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Kaybda f Day 1. Koulma katkemmel 24 sa3a w twsel l 00:00, kaytzad nhar jdid automatic (Day 2, Day 3...).
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 3 -->
+    <h2><span class="icon">☀️</span> 3. Celestial Lighting (L-Chams w L-Qmer)</h2>
+    <p class="section-desc">Had l-options homa li 7ellou l-mochkil dial <em>"blue then black"</em> bach maykhelliwch l-dnya twlli kahla f marra:</p>
+
+    <div class="card light">
+        <div class="var-header">
+            <span class="var-name">Sun Light</span>
+            <span class="var-type">Light (Directional Light)</span>
+        </div>
+        <div class="var-desc">Dow l-ra'issi dial l-3alam (Directional Light f l-hierarchy).</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Kay-attachi Directional Light dial l-scene. Had l-light kayakhoud dawr l-chams b nhar w dawr l-qmer b l-lil.
+        </div>
+    </div>
+
+    <div class="card light">
+        <div class="var-header">
+            <span class="var-name">Control Sun Rotation</span>
+            <span class="var-type">bool (Checkbox)</span>
+        </div>
+        <div class="var-desc">Douran dial l-chams w l-qmer m3a sa3a.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> B nhar kayle3 l-chams mn ch-cherq (10&deg;), katwsel l-zenith (75&deg;) f dhohr, w katghreb f l-gherb. B l-lil, kayakhoud dawr l-qmer w <strong>kaybqa dima dow dayer mn l-foq</strong> bach l-ard matwllich kahla!
+        </div>
+    </div>
+
+    <div class="card light">
+        <div class="var-header">
+            <span class="var-name">Control Sun Light</span>
+            <span class="var-type">bool (Checkbox)</span>
+        </div>
+        <div class="var-desc">T-beddal l-couleur w l-intensity dial dow.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Dow kaytbeddel f koul taniya: f sbah kaykoun dhbi byed, f dhohr pure white, f l-ghroub limouni w 7mer, w f l-lil kaywlli zreq fathi hadé (silvery-blue moonlight).
+        </div>
+    </div>
+
+    <div class="card light">
+        <div class="var-header">
+            <span class="var-name">Control Ambient</span>
+            <span class="var-type">bool (Checkbox)</span>
+        </div>
+        <div class="var-desc">Dow l-bî'a l-3amm (Ambient Light).</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Kayt7kkem f <code>RenderSettings.ambientLight</code>. Muhimm bzaf 7it kay-filli d-dlam dial l-lil b-dow zreq hadé bach l-perso w l-ard ibano w matkounch 3amyak d-dlam.
+        </div>
+    </div>
+
+    <div class="card light">
+        <div class="var-header">
+            <span class="var-name">Control Fog</span>
+            <span class="var-type">bool (Checkbox)</span>
+        </div>
+        <div class="var-desc">D-dbaba l-jawwiya (Atmospheric Fog).</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Ila knti m-active Fog f RenderSettings, had l-option katbeddel couleur d-dbaba automatic bach twali f nafs loun l-ghroub wlla loun sma.
+        </div>
+    </div>
+
+    <div class="card light">
+        <div class="var-header">
+            <span class="var-name">Sun Azimuth Offset</span>
+            <span class="var-type">float (Degrees, e.g. 50&deg;)</span>
+        </div>
+        <div class="var-desc">Zawia dial masar l-chams f l-ofsoq.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Kat-wejjah mnin katle3 l-chams w fin katghreb bnisba l-jbel w l-terrain dialek (Compass rotation).
+        </div>
+    </div>
+
+    <!-- SECTION 4 -->
+    <h2><span class="icon">✨</span> 4. Continuous Skybox Transition (Smooth Blending)</h2>
+    <p class="section-desc">Hna kayn l-mizan l-kbir li kaykhlli sma t-beddel <em>"chwya b chwya"</em>:</p>
+
+    <div class="card blend">
+        <div class="var-header">
+            <span class="var-name">Continuous Blending</span>
+            <span class="var-type">bool (Checkbox, Default: True)</span>
+        </div>
+        <div class="var-desc">L-crossfade l-mostamirr f ga3 thwani d nhar.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Had l-option katkhlli l-blending shader <code>Custom/SkyboxBlendedCubemap</code> idir fondu (dissolve) S-Curve bin les skyboxes. Ma kaynch plateau w ma kaynch freeze: koul taniya katmchi fiha, sma katbeddel chwya b chwya mn zarqa l-werdiya l-limouniya l-zarqa l-layliya!
+        </div>
+    </div>
+
+    <div class="card blend">
+        <div class="var-header">
+            <span class="var-name">GI Update Interval</span>
+            <span class="var-type">float (Seconds, Default: 2.0)</span>
+        </div>
+        <div class="var-desc">Waqt d t-te7yid dial Global Illumination w les réflexions.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Koul 2 twani kay-dir update l <code>DynamicGI.UpdateEnvironment()</code> bach l-m3adin w l-ma dial Suimono y-3ekso l-loun jdid dial sma bla ma i-tiyye7 les FPS dial l-game.
+        </div>
+    </div>
+
+    <!-- SECTION 5 -->
+    <h2><span class="icon">🌌</span> 5. الجدول dial 10 AllSkyFree Skyboxes</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Sa3a</th>
+                    <th>Smiya d l-Phase</th>
+                    <th>Skybox Material f AllSkyFree</th>
+                    <th>Mood w L-Couleur</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>0</strong></td>
+                    <td>06:00 - 09:30</td>
+                    <td><strong>Morning Sky</strong> (Bidaya @ 07:00)</td>
+                    <td><code>Day_BlueSky_Nothing Equirect</code></td>
+                    <td>Sbah dhbi, sma zarqa safya, dow nass3 (1.25)</td>
+                </tr>
+                <tr>
+                    <td><strong>1</strong></td>
+                    <td>09:30 - 13:30</td>
+                    <td><strong>Daytime Overcast</strong></td>
+                    <td><code>AllSky_Overcast4_Low Equirect</code></td>
+                    <td>Dhohr mtiyez, shab baydin, dow 9wi (1.35)</td>
+                </tr>
+                <tr>
+                    <td><strong>2</strong></td>
+                    <td>13:30 - 16:30</td>
+                    <td><strong>Golden Afternoon</strong></td>
+                    <td><code>Epic_GloriousPink Equirect</code></td>
+                    <td>L-3chiya l-dhbiya w l-werdiya (1.20)</td>
+                </tr>
+                <tr>
+                    <td><strong>3</strong></td>
+                    <td>16:30 - 18:00</td>
+                    <td><strong>Warm Sunset</strong></td>
+                    <td><code>Cold Sunset Equirect</code></td>
+                    <td>L-ghroub l-limouni w l-dhbi (0.95)</td>
+                </tr>
+                <tr>
+                    <td><strong>4</strong></td>
+                    <td>18:00 - 19:15</td>
+                    <td><strong>Late Sunset</strong></td>
+                    <td><code>Epic_BlueSunset Equirect</code></td>
+                    <td>Chafaq 7mer w limouni m3a zreq ghameq (0.70)</td>
+                </tr>
+                <tr>
+                    <td><strong>5</strong></td>
+                    <td>19:15 - 20:45</td>
+                    <td><strong>Deep Dusk</strong></td>
+                    <td><code>Deep Dusk Equirect</code></td>
+                    <td>Dusk l-violet w l-indigo (0.45)</td>
+                </tr>
+                <tr>
+                    <td><strong>6</strong></td>
+                    <td>20:45 - 23:30</td>
+                    <td><strong>Moonlit Night</strong></td>
+                    <td><code>AllSky_Night_MoonBurst Equirect</code></td>
+                    <td>L-gmr medwweya w shab feddiyin (0.32)</td>
+                </tr>
+                <tr>
+                    <td><strong>7</strong></td>
+                    <td>23:30 - 02:00</td>
+                    <td><strong>Deep Midnight</strong></td>
+                    <td><code>Cold Night Equirect</code></td>
+                    <td>Nss l-lil njoum w broud (0.26)</td>
+                </tr>
+                <tr>
+                    <td><strong>8</strong></td>
+                    <td>02:00 - 04:30</td>
+                    <td><strong>Late Night</strong></td>
+                    <td><code>Cartoon Base NightSky Equirect</code></td>
+                    <td>L-lil l-hadé k7el w zreq ghameq (0.22)</td>
+                </tr>
+                <tr>
+                    <td><strong>9</strong></td>
+                    <td>04:30 - 06:00</td>
+                    <td><strong>Pre-Dawn Cosmic</strong></td>
+                    <td><code>AllSky_Space_AnotherPlanet Equirect</code></td>
+                    <td>L-fjer l-fada'i violet w rose qbel ch-chrouq (0.42)</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- SECTION 6 -->
+    <h2><span class="icon">🏔️</span> 6. CaveAtmosphereSystem (Ida'at L-Ghar L-Dakhili)</h2>
+    <p class="section-desc">Hada howa l-system li m-attachi f <code>CaveAtmosphereSystem</code> bach dakhil l-ghar maybqa-ch k7el:</p>
+
+    <div class="card cave">
+        <div class="var-header">
+            <span class="var-name">Cave Fill Light</span>
+            <span class="var-type">Light (Point Light)</span>
+        </div>
+        <div class="var-desc">Dow dakhili li kaydwi l-ghorfa l-kbira dial l-ghar.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Kaydwi l-7yout dial l-7ejra w les outils bla ma i-dir ombres tqal. Kayakhoud l-couleur dial l-chams outdoor w kay-synkroh m3a dakhel.
+        </div>
+    </div>
+
+    <div class="card cave">
+        <div class="var-header">
+            <span class="var-name">Day Intensity vs Night Intensity</span>
+            <span class="var-type">float (Day: 0.65 | Night: 0.08)</span>
+        </div>
+        <div class="var-desc">Farq dial dow bin n-nhar w l-lil dakhil l-ghar.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> B nhar (07:00 - 18:30) l-ghar kaybqa medwi b <code>0.65</code> bach tchouf l-ahjar w l-m3adin mzian. B l-lil kayhbet automatic l <code>0.08</code> w kaywlli b loun l-slate/indigo bach i-7ess l-la3eb b-dlam w l-mood l-waqi3i.
+        </div>
+    </div>
+
+    <div class="card cave">
+        <div class="var-header">
+            <span class="var-name">Cave Color Multiplier</span>
+            <span class="var-type">Color (Warm Subterranean Tint)</span>
+        </div>
+        <div class="var-desc">Tezian l-loun dakhil l-ghar.</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Kayched l-loun d chams outdoor w kayzid fih chwya d def'e. F l-ghroub, l-7yout d l-ghar kayban fihom le3kas hamr w limouni zwin!
+        </div>
+    </div>
+
+    <div class="card cave">
+        <div class="var-header">
+            <span class="var-name">Cave Entrance Trigger & PostProcess Volume</span>
+            <span class="var-type">Trigger Zone & Volume Profile</span>
+        </div>
+        <div class="var-desc">Dkhla d l-ghar w t-keiyof dial l-3ayn (Eye Adaptation).</div>
+        <div class="darija-box">
+            <strong>Chnou kaydir:</strong> Mnin l-perso kaydkhoul mn l-bab d l-ghar, l-trigger kayhsseb l-3umq b-dabd. L-Volume <code>CaveVolumeProfile</code> kaytl3 l-exposition (+0.45 EV) bhal l-3ayn dial bnadm mnin katwesse3 f d-dlam, w kay-raf3 l-crevices bach d-dlam maykounch 3amyak.
+        </div>
+    </div>
+
+    <!-- SECTION 7 -->
+    <h2><span class="icon">💡</span> 7. Nassa'i7 d Test w L-Isti3mal</h2>
+    <div class="tip-box">
+        &bull; <strong>Bach t-testi l-waqt:</strong> Mchi l <code>DayNightSystem</code> f l-Hierarchy, w 7errek l-slider <code>Time (0h - 24h)</code> b chwya b chwya. Ghat-chouf l-transition smooth 100%.<br>
+        &bull; <strong>Bach t-zreb l-waqt f Play:</strong> Berek 3la l-widget dial sa3a f l-foq 3la limn (wlla wrrek 3la touche <code>T</code> f l-clavier), w khtar <code>5x</code> wlla <code>20x</code>.<br>
+        &bull; <strong>Ila bghiti nhar itewwel:</strong> Beddel <code>Day Duration In Minutes</code> mn 5.0 l 10.0 wlla 15.0 dqiqa.
+    </div>
+
+    <div class="footer">
+        Jbel Ighoud Project &bull; Unity 6 Universal Render Pipeline &bull; DayNight & Cave Atmosphere System
+    </div>
+
+</body>
+</html>
+"""
+
+html_path = "F:/jbel/My project (1)/DayNightSystem_Guide_Darija.html"
+pdf_path = "F:/jbel/My project (1)/DayNightSystem_Guide_Darija.pdf"
+
+with open(html_path, "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+edge_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+cmd = [
+    edge_path,
+    "--headless=new",
+    "--disable-gpu",
+    "--no-pdf-header-footer",
+    f"--print-to-pdf={pdf_path}",
+    html_path
+]
+
+print("Compiling PDF with Edge...")
+res = subprocess.run(cmd, capture_output=True, text=True)
+if os.path.exists(pdf_path):
+    print("SUCCESS: PDF created at", pdf_path, "Size:", os.path.getsize(pdf_path), "bytes")
+    # Copy to artifact folder
+    art_dir = r"C:\Users\PC hh\.gemini\antigravity\brain\3f236d89-fb37-4dc8-8500-c7eeb6c2805c"
+    art_pdf = os.path.join(art_dir, "DayNightSystem_Guide_Darija.pdf")
+    shutil.copyfile(pdf_path, art_pdf)
+    print("Copied to artifacts at:", art_pdf)
+else:
+    print("ERROR: PDF was not generated. Stderr:", res.stderr)

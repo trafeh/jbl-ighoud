@@ -9,31 +9,21 @@ public class GameSaveManager : MonoBehaviour
 {
     public static GameSaveManager Instance { get; private set; }
 
-    [Header("AutoSave Settings")]
-    [Tooltip("Autosave interval in seconds. Default is 60 seconds (1 minute).")]
-    [SerializeField] private float autoSaveInterval = 60f;
-
-    [Tooltip("Whether in-game autosave is active.")]
-    [SerializeField] private bool autoSaveEnabled = true;
-
-    [Tooltip("Automatically load the last autosave file when the game starts.")]
-    [SerializeField] private bool autoLoadOnStart = false;
-
-    [Tooltip("Display a temporary toast notification on screen when autosave occurs.")]
-    [SerializeField] private bool showToastNotification = true;
+    [Header("AutoSave Settings (DISABLED)")]
+    [Tooltip("In-game autosave has been disabled. Only Unity's editor autosave is active.")]
+    [SerializeField] private bool showToastNotification = false;
 
     [Header("File Settings")]
     [SerializeField] private string saveFileName = "game_autosave.json";
 
-    private float timeUntilNextSave;
     private HashSet<string> destroyedRocksSet = new HashSet<string>();
     private string toastMessage = "";
     private float toastTimer = 0f;
     private const float ToastDuration = 3.0f;
 
-    public float TimeUntilNextSave => Mathf.Max(0f, timeUntilNextSave);
-    public float AutoSaveInterval => autoSaveInterval;
-    public bool IsAutoSaveEnabled => autoSaveEnabled;
+    public float TimeUntilNextSave => 0f;
+    public float AutoSaveInterval => 0f;
+    public bool IsAutoSaveEnabled => false;
 
     private string SaveFilePath => Path.Combine(Application.persistentDataPath, saveFileName);
 
@@ -45,39 +35,23 @@ public class GameSaveManager : MonoBehaviour
             return;
         }
         Instance = this;
-
-        timeUntilNextSave = autoSaveInterval;
     }
 
     private void Start()
     {
-        if (autoLoadOnStart && HasSaveFile())
-        {
-            // Small delay to ensure all scene components finished Awake/Start initialization
-            StartCoroutine(DelayedLoadRoutine());
-        }
-    }
-
-    private IEnumerator DelayedLoadRoutine()
-    {
-        yield return null; // Wait 1 frame
-        LoadGame();
+        // In-game autosave and autoload are disabled. Keeping only Unity's Editor AutoSave.
     }
 
     private void Update()
     {
-        // 1. In-game autosave countdown timer
-        if (autoSaveEnabled)
-        {
-            timeUntilNextSave -= Time.deltaTime;
-            if (timeUntilNextSave <= 0f)
-            {
-                SaveGame("AutoSave (1 min)");
-                timeUntilNextSave = autoSaveInterval;
-            }
-        }
+        // In-game periodic autosave timer removed per user instruction.
+        // Only Unity's Editor autosave (EditorAutoSave) remains active.
 
-        // 2. Update toast notification timer
+        // Update toast notification timer
+        if (toastTimer > 0f)
+        {
+            toastTimer -= Time.deltaTime;
+        }
         if (toastTimer > 0f)
         {
             toastTimer -= Time.deltaTime;
@@ -95,7 +69,6 @@ public class GameSaveManager : MonoBehaviour
         if (Keyboard.current.f5Key.wasPressedThisFrame)
         {
             SaveGame("Manual QuickSave (F5)");
-            timeUntilNextSave = autoSaveInterval; // Reset interval
         }
 
         // F9 = Quick Load

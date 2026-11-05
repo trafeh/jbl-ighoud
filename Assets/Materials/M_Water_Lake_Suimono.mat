@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: M_Water_Lake_Suimono
+  m_Shader: {fileID: 4800000, guid: ace82eda4d6f28a4985732704f038f7f, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _CubeTex:
+        m_Texture: {fileID: 8900000, guid: c27d2f9a7fe1df7448a59cd7e8306390, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _FoamTex:
+        m_Texture: {fileID: 2800000, guid: 14c55ed649175884784db6c178f4e654, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalTexA:
+        m_Texture: {fileID: 2800000, guid: 48e29dc2e9488474081bc20a42a364b9, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalTexB:
+        m_Texture: {fileID: 2800000, guid: fb77700eb10ac344db495df815b29823, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _FoamIntensity: 0.25
+    - _FoamScale: 0.035
+    - _FresnelPower: 3
+    - _NormalScaleA: 0.05
+    - _NormalScaleB: 0.11
+    - _NormalStrength: 0.85
+    - _ReflectionStrength: 0.55
+    - _Smoothness: 0.94
+    - _WaveAmp: 0.015
+    - _WaveFreq: 1
+    m_Colors:
+    - _DeepColor: {r: 0.06, g: 0.22, b: 0.38, a: 0.58}
+    - _FoamColor: {r: 0.92, g: 0.97, b: 1, a: 0.45}
+    - _FoamSpeed: {r: 0.012, g: -0.016, b: 0, a: 0}
+    - _ShallowColor: {r: 0.24, g: 0.62, b: 0.7, a: 0.42}
+    - _SpecColor: {r: 1, g: 0.98, b: 0.9, a: 1}
+    - _WaveSpeedA: {r: 0.022, g: 0.014, b: 0, a: 0}
+    - _WaveSpeedB: {r: -0.016, g: 0.024, b: 0, a: 0}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

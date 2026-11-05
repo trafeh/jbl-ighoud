@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5470fdd092b1469439d1e65bff391506, type: 3}
+  m_Name: Calcaire_Limestone
+  m_EditorClassIdentifier: Assembly-CSharp::JbelIghoud.Lithic.RockData
+  rockName: Rock 3 - Calcaire (Limestone)
+  rockType: 2
+  tags: 24
+  description: 'Rock 3 - Calcaire: Soft-to-medium sedimentary rock, scratches easily
+    and yields chalk powder.'
+  historicalNotes: Abundantly forms the karstic cave walls of Jbel Ighoud where early
+    humans sheltered.
+  hardness: 7
+  toughness: 0.4
+  baseDurability: 3
+  mass: 1.1
+  rockColor: {r: 0.92, g: 0.91, b: 0.85, a: 1}
+  rockMaterial: {fileID: 0}
+  rockMesh: {fileID: -3720551589674065424, guid: a47379558dad0ff4faff187c146d9dc7, type: 3}
+  meshScale: {x: 24.83, y: 24.83, z: 24.83}
+  residueColor: {r: 0.95, g: 0.95, b: 0.92, a: 1}
+  flakePrefab: {fileID: 0}
+  powderResiduePrefab: {fileID: 0}
+  debrisPrefab: {fileID: 0}
+  specialDropPrefab: {fileID: 0}
+  specialDropChance: 0.35
+  strikeClips: []
+  shatterClip: {fileID: 0}
