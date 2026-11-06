@@ -200,11 +200,19 @@ public class InventoryUI : MonoBehaviour
         if (hudCanvas == null) hudCanvas = FindAnyObjectByType<Canvas>();
         if (hudCanvas == null) return;
 
-        // 1. If not assigned, search canvas for existing button
+        // 1. If not assigned, search canvas for existing button (prioritize new Jbel HUD BagButton)
         if (hudButtonObj == null)
         {
-            Transform existing = hudCanvas.transform.Find("InventoryHUDButton");
-            if (existing != null) hudButtonObj = existing.gameObject;
+            Transform bagTr = hudCanvas.transform.Find("JbelHUD_Panel/ActionButtonsCluster/BagButton");
+            if (bagTr != null)
+            {
+                hudButtonObj = bagTr.gameObject;
+            }
+            else
+            {
+                Transform existing = hudCanvas.transform.Find("InventoryHUDButton");
+                if (existing != null) hudButtonObj = existing.gameObject;
+            }
         }
 
         // 2. NEVER destroy user objects & NEVER overwrite user RectTransform (anchoredPosition, anchors, size)

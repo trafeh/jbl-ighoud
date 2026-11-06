@@ -322,7 +322,7 @@ public class TopDownPlayerController : MonoBehaviour
         UpdateSmashButtonVisuals();
         UpdateDiveButtonVisuals();
 
-        if (isControlsLocked) return;
+        if (isControlsLocked || Time.timeScale <= 0f) return;
 
         UpdateWaterState();
 

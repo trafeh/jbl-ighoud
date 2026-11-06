@@ -104,6 +104,18 @@ public class MobileFreeLookTouchController : MonoBehaviour
     private void Update()
     {
         if (isInputDisabled || orbitalFollow == null) return;
+        if (Time.timeScale <= 0f)
+        {
+            activeFingerId = -1;
+            isMouseDragging = false;
+            return;
+        }
+        if (JbelIghoud.UI.JbelPauseMenuController.Instance != null && JbelIghoud.UI.JbelPauseMenuController.Instance.IsPaused)
+        {
+            activeFingerId = -1;
+            isMouseDragging = false;
+            return;
+        }
         if (RockDragManager.Instance != null && RockDragManager.Instance.IsInSmashMode) return;
 
         FindPlayerReference();

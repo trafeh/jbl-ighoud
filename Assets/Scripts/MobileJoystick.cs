@@ -134,6 +134,8 @@ public class MobileJoystick : MonoBehaviour, IPointerDownHandler, IDragHandler, 
 
     public void OnPointerDown(PointerEventData eventData)
     {
+        if (Time.timeScale <= 0f) return;
+
         // Touching the stick again unlocks sprint immediately!
         if (isSprintLocked)
         {
@@ -156,6 +158,7 @@ public class MobileJoystick : MonoBehaviour, IPointerDownHandler, IDragHandler, 
 
     public void OnDrag(PointerEventData eventData)
     {
+        if (Time.timeScale <= 0f) return;
         if (background == null || handle == null) return;
 
         Vector2 position = RectTransformUtility.WorldToScreenPoint(canvasCamera, background.position);

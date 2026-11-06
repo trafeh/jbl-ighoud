@@ -365,6 +365,12 @@ namespace JbelIghoud.Survival
             }
             if (canvas == null) return;
 
+            // If authentic Jbel HUD exists, skip legacy survival widget panel creation
+            if (canvas.transform.Find("JbelHUD_Panel") != null)
+            {
+                return;
+            }
+
             // Load Sprites and TMP Font Asset
             Sprite heartSp = Resources.Load<Sprite>("heart pixel art 64x64");
 #if UNITY_EDITOR
