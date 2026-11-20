@@ -36,7 +36,7 @@ namespace JbelIghoud.Lithic
         public event Action<Rock, InteractionResult> OnInteractionResolved;
         public event Action<Rock> OnRockDestroyed;
 
-        public RockData Data => rockData;
+        public RockData Data { get => rockData; set => rockData = value; }
         public int CurrentDurability => currentDurability;
         public int MaxDurability => rockData != null ? rockData.baseDurability : 3;
         public float Hardness => rockData != null ? rockData.hardness : 5f;
@@ -385,41 +385,13 @@ namespace JbelIghoud.Lithic
 
         private void SpawnProceduralDebris()
         {
-            Color debrisColor = rockData != null ? rockData.rockColor : Color.gray;
-            for (int i = 0; i < 5; i++)
-            {
-                GameObject chunk = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                chunk.name = "RockFragment";
-                chunk.transform.position = transform.position + UnityEngine.Random.insideUnitSphere * 0.2f;
-                chunk.transform.localScale = Vector3.one * UnityEngine.Random.Range(0.12f, 0.25f);
-
-                Renderer r = chunk.GetComponent<Renderer>();
-                if (r != null) r.material.color = debrisColor;
-
-                Rigidbody cRb = chunk.AddComponent<Rigidbody>();
-                cRb.mass = 0.2f;
-                cRb.AddExplosionForce(220f, transform.position, 1.8f);
-
-                Destroy(chunk, 2.5f);
-            }
+            JbelImpactFX.Shatter(transform.position, rockData != null ? rockData.rockColor : Color.gray, 0.8f);
         }
 
         private void SpawnHitSparks(Vector3 pos, InteractionResult result)
         {
-            GameObject spark = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            spark.name = "ImpactFlash";
-            spark.transform.position = pos;
-            spark.transform.localScale = Vector3.one * 0.35f;
-
-            Collider c = spark.GetComponent<Collider>();
-            if (c != null) Destroy(c);
-
-            Renderer rend = spark.GetComponent<Renderer>();
-            if (rend != null)
-            {
-                rend.material.color = result.outcomeType == InteractionOutcomeType.StrikeSparks ? new Color(1f, 0.8f, 0.1f) : Color.white;
-            }
-            Destroy(spark, 0.2f);
+            if (RockDragManager.Instance != null && RockDragManager.Instance.IsInSmashMode) return;
+            JbelImpactFX.Hit(pos, rockData != null ? rockData.hardness : 10f, rockData != null ? rockData.residueColor : Color.gray);
         }
 
         private void PlayStrikeAudio(Rock sourceRock, AudioClip overrideClip = null)

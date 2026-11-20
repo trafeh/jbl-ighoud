@@ -73,8 +73,23 @@ public class InventoryManager : MonoBehaviour
     {
         if (_instance != null && _instance != this)
         {
-            Destroy(gameObject);
-            return;
+            // If the existing instance was auto-created by the Instance getter (bare GameObject),
+            // let the scene-placed manager take over instead.
+            bool existingIsAutoCreated = _instance.gameObject.name == "InventoryManager" &&
+                                         _instance.GetComponents<Component>().Length <= 2;
+            if (existingIsAutoCreated)
+            {
+                var stale = _instance;
+                foreach (var it in stale.items) if (it != null && !items.Contains(it)) items.Add(it);
+                _instance = this;
+                Destroy(stale.gameObject);
+            }
+            else
+            {
+                // Only remove this component - never the host (it may be the whole HUD canvas)
+                Destroy(this);
+                return;
+            }
         }
         _instance = this;
 
@@ -96,6 +111,12 @@ public class InventoryManager : MonoBehaviour
     /// <summary>
     /// Checks if adding a given weight would exceed the 200kg maximum limit.
     /// </summary>
+    /// <summary>Raise OnInventoryChanged from outside (e.g. a fragment stack grew).</summary>
+    public void NotifyChanged() { OnInventoryChanged?.Invoke(); }
+
+    /// <summary>Show a toast notification from outside.</summary>
+    public void Notify(string message, Color color) { OnInventoryNotification?.Invoke(message, color); }
+
     public bool CanAddItem(float itemWeight)
     {
         return (CurrentWeight + itemWeight) <= (maxWeight + 0.001f);
@@ -150,7 +171,7 @@ public class InventoryManager : MonoBehaviour
         items.Add(rock);
 
         string rockName = rock.rockData != null ? rock.rockData.rockName : rock.name;
-        string notif = $"[+] {rockName} ({rockWeight:F1} kg) stored in Satchel.";
+        string notif = $"[+] {rockName} collected ({rockWeight:F1} kg)";
         Debug.Log($"<color=#89D99D><b>[Inventory]</b></color> {notif} Total: {CurrentWeight:F1}/{maxWeight:F1} kg");
         OnInventoryNotification?.Invoke(notif, new Color(0.55f, 0.95f, 0.65f));
 

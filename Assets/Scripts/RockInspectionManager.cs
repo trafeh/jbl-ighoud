@@ -615,17 +615,26 @@ public class RockInspectionManager : MonoBehaviour
         fsbRt.anchorMin = new Vector2(0f, 1f);
         fsbRt.anchorMax = new Vector2(0f, 1f);
         fsbRt.pivot = new Vector2(0f, 1f);
-        fsbRt.anchoredPosition = new Vector2(40f, -40f);
-        fsbRt.sizeDelta = new Vector2(240f, 56f);
+        fsbRt.anchoredPosition = new Vector2(60f, -48f);
+        fsbRt.sizeDelta = new Vector2(210f, 72f);
+
+        // Match the Samples inventory UI (brown pill, IM Fell font)
+        Sprite pillSprite = null; TMP_FontAsset pillFont = null;
+        var samplesModal = JbelIghoud.UI.JbelSamplesInventoryModal.Instance;
+        if (samplesModal != null)
+        {
+            var pillTr = samplesModal.transform.Find("Container/LeftPanel_Samples/HeaderPill_Samples");
+            if (pillTr != null) { var pi = pillTr.GetComponent<Image>(); if (pi != null) pillSprite = pi.sprite; }
+            var dt = samplesModal.transform.Find("Container/RightPanel_Infos/DescriptionText");
+            if (dt != null) { var dtm = dt.GetComponent<TextMeshProUGUI>(); if (dtm != null) pillFont = dtm.font; }
+        }
 
         Image fsbBg = fullScreenBackBtnObj.AddComponent<Image>();
-        fsbBg.color = new Color(0.08f, 0.10f, 0.14f, 0.94f);
-
-        Outline fsbOutline = fullScreenBackBtnObj.AddComponent<Outline>();
-        fsbOutline.effectColor = new Color(0.82f, 0.65f, 0.28f, 0.85f);
-        fsbOutline.effectDistance = new Vector2(2f, -2f);
+        if (pillSprite != null) { fsbBg.sprite = pillSprite; fsbBg.type = Image.Type.Sliced; fsbBg.color = Color.white; fullScreenBackBtnObj.AddComponent<JbelIghoud.UI.JbelSlicedHeightScaler>(); }
+        else fsbBg.color = new Color(0.25f, 0.15f, 0.07f, 0.95f);
 
         Button fsbButton = fullScreenBackBtnObj.AddComponent<Button>();
+        ColorBlock fsbCb = fsbButton.colors; fsbCb.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f); fsbCb.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f); fsbButton.colors = fsbCb;
         fsbButton.onClick.AddListener(CloseInspection);
 
         GameObject fsbTextObj = new GameObject("Text");
@@ -636,11 +645,12 @@ public class RockInspectionManager : MonoBehaviour
         fsbtRt.sizeDelta = Vector2.zero;
 
         TextMeshProUGUI fsbText = fsbTextObj.AddComponent<TextMeshProUGUI>();
-        fsbText.fontSize = 15;
-        fsbText.fontStyle = FontStyles.Bold;
+        if (pillFont != null) fsbText.font = pillFont;
+        fsbText.fontSize = 38;
         fsbText.alignment = TextAlignmentOptions.Center;
-        fsbText.color = new Color(0.96f, 0.88f, 0.68f);
-        fsbText.text = "< BACK TO SATCHEL";
+        fsbText.color = new Color(0.98f, 0.96f, 0.88f);
+        fsbText.raycastTarget = false;
+        fsbText.text = "Back";
 
         fullScreenBackBtnObj.SetActive(false);
 
@@ -684,7 +694,7 @@ public class RockInspectionManager : MonoBehaviour
         {
             inspectionCanvasObj.transform.SetAsLastSibling();
             var bg = inspectionCanvasObj.GetComponent<Image>();
-            if (bg != null) bg.color = new Color(0.04f, 0.05f, 0.08f, 1.0f);
+            if (bg != null) bg.color = new Color(0.075f, 0.045f, 0.025f, 1.0f);
             inspectionCanvasObj.SetActive(true);
         }
         if (studioRoot != null) studioRoot.SetActive(true);
@@ -1350,9 +1360,10 @@ public class RockInspectionManager : MonoBehaviour
             player.SetControlsLocked(false);
         }
 
-        if (wasReturningToInv && InventoryUI.Instance != null)
+        if (wasReturningToInv)
         {
-            InventoryUI.Instance.OpenInventory();
+            if (JbelIghoud.UI.JbelSamplesInventoryModal.Instance != null) JbelIghoud.UI.JbelSamplesInventoryModal.Instance.OpenInventory();
+            else if (InventoryUI.Instance != null) InventoryUI.Instance.OpenInventory();
         }
     }
 

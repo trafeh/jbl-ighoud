@@ -17,8 +17,20 @@ public class RockItem : MonoBehaviour
         set => weight = value;
     }
 
+    [Header("Fragments (crafting material)")]
+    [Tooltip("> 0: this item is a stack of small pieces of Rock Data, not a whole stone.")]
+    public int fragmentCount = 0;
+    public bool IsFragment => fragmentCount > 0;
+
+    [Tooltip("The Elder's quartzite hammerstone: used to strike other stones, never breaks.")]
+    public bool isHammerstone = false;
+    /// <summary>Pieces a whole stone breaks into when it shatters in the player's hands.</summary>
+    public const int FragmentsPerStone = 5;
+    private const float FragmentMassRatio = 0.08f;
+
     public float GetWeight()
     {
+        if (IsFragment) return Mathf.Max(0.01f, (rockData != null ? rockData.mass : 1.2f) * FragmentMassRatio * fragmentCount);
         if (weight > 0.001f) return weight;
         if (rockData != null && rockData.mass > 0.001f) return rockData.mass;
         return 1.2f;
@@ -91,7 +103,22 @@ public class RockItem : MonoBehaviour
     {
         if (rockData != null)
         {
-            if (rockData.rockMesh != null)
+            // fragment piles use their own low-poly shard mesh (Resources/Fragments/FragmentPile_<data>)
+            if (IsFragment)
+            {
+                var pile = Resources.Load<Mesh>("Fragments/FragmentPile_" + rockData.name);
+                if (pile != null)
+                {
+                    MeshFilter fmf = GetComponent<MeshFilter>();
+                    if (fmf == null) fmf = gameObject.AddComponent<MeshFilter>();
+                    fmf.sharedMesh = pile;
+                    MeshCollider fmc = GetComponent<MeshCollider>();
+                    if (fmc == null) fmc = gameObject.AddComponent<MeshCollider>();
+                    fmc.sharedMesh = pile;
+                    fmc.convex = true;
+                }
+            }
+            else if (rockData.rockMesh != null)
             {
                 MeshFilter mf = GetComponent<MeshFilter>();
                 if (mf == null) mf = gameObject.AddComponent<MeshFilter>();
@@ -379,15 +406,37 @@ public class RockItem : MonoBehaviour
         otherRock.TakeHit();
     }
 
+    private float partialDamage;
+    /// <summary>Health left including fractions (timing-bar hits deal 2 or 0.4).</summary>
+    public float HealthLeft => Mathf.Max(0f, currentHits - partialDamage);
+
+    /// <summary>Fractional damage: weak hits (0.4) add up until they remove a whole hit point.</summary>
+    public void TakeDamage(float amount)
+    {
+        if (amount <= 0f) return;
+        if (isHammerstone) { TakeHit(1); return; }
+        partialDamage += amount;
+        int whole = Mathf.FloorToInt(partialDamage + 0.0001f);
+        partialDamage -= whole;
+        if (whole > 0) TakeHit(whole);
+        else if (rockRenderer != null) { rockRenderer.material.color = Color.Lerp(originalColor, Color.white, 0.3f); Invoke(nameof(ResetColor), 0.1f); }
+    }
+
     public void TakeHit(int damage = 1)
     {
+        if (isHammerstone)
+        {
+            // the hammerstone never wears out: just a quick flash
+            if (rockRenderer != null) { rockRenderer.material.color = Color.Lerp(originalColor, Color.white, 0.4f); Invoke(nameof(ResetColor), 0.12f); }
+            return;
+        }
         currentHits = Mathf.Max(0, currentHits - damage);
         UpdateLabel();
 
         // Flash red
         if (rockRenderer != null)
         {
-            rockRenderer.material.color = Color.red;
+            rockRenderer.material.color = Color.Lerp(originalColor, Color.white, 0.55f); // quick bright flash
             Invoke(nameof(ResetColor), 0.15f);
         }
 
@@ -411,6 +460,10 @@ public class RockItem : MonoBehaviour
     {
         SpawnDestructionEffect();
 
+        // broken by the player (in hand / striking): the pieces go to the bag as crafting material
+        if (!IsFragment && (isHeld || (RockDragManager.Instance != null && RockDragManager.Instance.IsInSmashMode)))
+            GrantFragments(FragmentsPerStone);
+
         OnRockDestroyedEvent?.Invoke(this);
 
         if (holdingPlayer != null)
@@ -426,45 +479,57 @@ public class RockItem : MonoBehaviour
         Destroy(gameObject);
     }
 
+    /// <summary>Adds the pieces of this stone to the bag, stacking onto an existing pile of the same stone.</summary>
+    private void GrantFragments(int count)
+    {
+        var inv = InventoryManager.Instance;
+        if (inv == null || rockData == null || count <= 0) return;
+        string label = (rockData.rockName ?? rockData.name);
+
+        var items = inv.Items;
+        for (int i = 0; i < items.Count; i++)
+        {
+            var it = items[i];
+            if (it != null && it.IsFragment && it.rockData == rockData)
+            {
+                it.fragmentCount += count;
+                inv.Notify($"[+] {count} fragments  ({label})", new Color(0.95f, 0.82f, 0.5f));
+                inv.NotifyChanged();
+                return;
+            }
+        }
+
+        // new pile: a small, inactive copy of this stone that lives in the bag
+        var go = Instantiate(gameObject);
+        go.name = rockData.name + "_Fragments";
+        var frag = go.GetComponent<RockItem>();
+        frag.isHeld = false;
+        frag.isBeingDragged = false;
+        frag.fragmentCount = count;
+        var lithic = go.GetComponent<JbelIghoud.Lithic.Rock>();
+        if (lithic != null) Destroy(lithic); // it would re-apply the whole-stone mesh
+        frag.ApplyRockData();
+        var shine = go.GetComponent("JbelStoneShine");
+        if (shine != null) Destroy(shine);
+        var rb = go.GetComponent<Rigidbody>();
+        if (rb != null) rb.isKinematic = false;
+        var mf = go.GetComponent<MeshFilter>();
+        if (mf != null && mf.sharedMesh != null)
+            go.transform.localScale = Vector3.one * (0.35f / Mathf.Max(0.0001f, mf.sharedMesh.bounds.size.magnitude)); // ~35 cm pile
+        if (!inv.AddItem(frag)) { Destroy(go); return; }
+        inv.Notify($"[+] {count} fragments  ({label})", new Color(0.95f, 0.82f, 0.5f));
+    }
+
     private void SpawnHitEffect(Vector3 pos)
     {
-        GameObject spark = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        spark.name = "SmashEffect";
-        spark.transform.position = pos;
-        spark.transform.localScale = Vector3.one * 0.5f;
-        Collider col = spark.GetComponent<Collider>();
-        if (col != null) Destroy(col);
-
-        Renderer rend = spark.GetComponent<Renderer>();
-        if (rend != null)
-        {
-            rend.material.color = Color.yellow;
-        }
-        Destroy(spark, 0.25f);
+        // the first-person strike already plays the full impact feedback
+        if (RockDragManager.Instance != null && RockDragManager.Instance.IsInSmashMode) return;
+        JbelImpactFX.Hit(pos, rockData != null ? rockData.hardness : strength, rockData != null ? rockData.residueColor : Color.gray);
     }
 
     private void SpawnDestructionEffect()
     {
-        for (int i = 0; i < 6; i++)
-        {
-            GameObject debris = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            debris.name = "RockDebris";
-            debris.transform.position = transform.position + Random.insideUnitSphere * 0.3f;
-            debris.transform.localScale = Vector3.one * Random.Range(0.18f, 0.32f);
-            
-            Collider col = debris.GetComponent<Collider>();
-            if (col != null) Destroy(col);
-
-            Renderer rend = debris.GetComponent<Renderer>();
-            if (rend != null)
-            {
-                rend.material.color = new Color(0.35f, 0.35f, 0.35f);
-            }
-
-            Rigidbody rb = debris.AddComponent<Rigidbody>();
-            rb.AddExplosionForce(280f, transform.position, 2f);
-
-            Destroy(debris, 1.2f);
-        }
+        Color c = rockData != null ? rockData.rockColor : new Color(0.35f, 0.35f, 0.35f);
+        JbelImpactFX.Shatter(transform.position, c, 0.8f);
     }
 }

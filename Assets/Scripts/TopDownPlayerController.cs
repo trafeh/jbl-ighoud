@@ -178,7 +178,7 @@ public class TopDownPlayerController : MonoBehaviour
     public bool IsUnderwater => isInWater && (isDiving || (currentSubmersionDepth >= (neckHeight + 0.35f)));
     public float WaterSubmersionDepth => currentSubmersionDepth;
     public float WaterSurfaceY => currentWaterSurfaceY;
-    public int MaxHeldRocks => maxHeldRocks;
+    public int MaxHeldRocks { get => maxHeldRocks; set => maxHeldRocks = Mathf.Max(1, value); }
     public int HeldRockCount => heldRocks.Count;
     public IReadOnlyList<RockItem> HeldRocks => heldRocks;
     public bool IsHandsFull => heldRocks.Count >= maxHeldRocks;
@@ -210,6 +210,7 @@ public class TopDownPlayerController : MonoBehaviour
         }
 
         _instance = this;
+        isControlsLocked = false;
 
         if (pickButton == null)
         {
@@ -293,6 +294,10 @@ public class TopDownPlayerController : MonoBehaviour
     }
 
     private bool isControlsLocked = false;
+    /// <summary>Scripted max ground speed (e.g. walking beside the Elder). &lt;= 0 means no cap.</summary>
+    public float ExternalSpeedCap { get; set; } = -1f;
+    /// <summary>Blocks jumping and sprinting while true (scripted walk-and-talk moments).</summary>
+    public bool ExternalJumpLock { get; set; }
     public bool IsControlsLocked => isControlsLocked;
 
     public void SetControlsLocked(bool locked)
@@ -715,7 +720,9 @@ public class TopDownPlayerController : MonoBehaviour
         {
             // Free Fire style: walk on light stick push, sprint on outer stick push or locked sprint
             float speedScale = isSprinting ? sprintSpeed : Mathf.Lerp(moveSpeed * 0.45f, moveSpeed, Mathf.Clamp01((input.magnitude - 0.1f) / 0.55f));
+            if (ExternalJumpLock) speedScale = Mathf.Min(speedScale, moveSpeed);
             targetSpeed = speedScale * input.magnitude;
+            if (ExternalSpeedCap > 0f) targetSpeed = Mathf.Min(targetSpeed, ExternalSpeedCap);
             accelRate = input.sqrMagnitude > 0.01f ? acceleration : deceleration;
         }
 
@@ -978,6 +985,7 @@ public class TopDownPlayerController : MonoBehaviour
     public void Jump()
     {
         if (isControlsLocked || (!isSwimming && isOnSteepSlope)) return;
+        if (ExternalJumpLock && !isSwimming) return;
         if (characterController == null) characterController = GetComponent<CharacterController>();
         if (characterController == null) return;
 

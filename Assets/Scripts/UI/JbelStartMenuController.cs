@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
+using JbelIghoud.Game;
 
 namespace JbelIghoud.UI
 {
@@ -76,6 +77,25 @@ namespace JbelIghoud.UI
         [SerializeField] private Button optionButton;
         [SerializeField] private Button creditsButton;
         [SerializeField] private Button arButton;
+
+        [Header("========================================")]
+        [Header("--- OPTION / CREDITS POPUPS ---")]
+        [Header("========================================")]
+        [Tooltip("Settings dialog opened by the OPTION button (same one used by the pause menu).")]
+        [SerializeField] private JbelSettingsMenuController settingsMenu;
+        [Tooltip("Credits dialog opened by the CREDITS button.")]
+        [SerializeField] private JbelCreditsModal creditsModal;
+
+        [Header("========================================")]
+        [Header("--- CONTINUE / START GAME ---")]
+        [Header("========================================")]
+        [SerializeField] private string startGameLabel = "START GAME";
+        [SerializeField] private string confirmNewGameLabel = "START OVER?";
+        [Tooltip("Seconds the 'start over' confirmation stays armed.")]
+        [SerializeField] private float confirmWindow = 3f;
+        [SerializeField, Range(0f, 1f)] private float disabledContinueAlpha = 0.4f;
+
+        private float newGameArmedUntil = -1f;
 
         [Header("========================================")]
         [Header("--- INTERACTIVE ICON REFERENCES ---")]
@@ -182,7 +202,60 @@ namespace JbelIghoud.UI
 
         private void Start()
         {
+            RefreshContinueState();
+            SetStartLabel(startGameLabel);
             StartCoroutine(StartupSequenceRoutine());
+        }
+
+        /// <summary>CONTINUE is only usable once a journey exists.</summary>
+        private void RefreshContinueState()
+        {
+            if (continueButton == null) return;
+            bool has = JbelPlayerProfile.HasProfile;
+            continueButton.interactable = has;
+            var cg = continueButton.GetComponent<CanvasGroup>();
+            if (cg == null) cg = continueButton.gameObject.AddComponent<CanvasGroup>();
+            cg.alpha = has ? 1f : disabledContinueAlpha;
+        }
+
+        private TextMeshProUGUI StartLabel()
+        {
+            if (modeSurvieButton == null) return null;
+            var t = modeSurvieButton.transform.Find("Label");
+            return t != null ? t.GetComponent<TextMeshProUGUI>() : modeSurvieButton.GetComponentInChildren<TextMeshProUGUI>();
+        }
+
+        private void SetStartLabel(string text)
+        {
+            var l = StartLabel();
+            if (l != null) l.text = text;
+        }
+
+        private bool menuDimmedForSettings;
+
+        private void Update()
+        {
+            if (newGameArmedUntil > 0f && Time.unscaledTime > newGameArmedUntil)
+            {
+                newGameArmedUntil = -1f;
+                SetStartLabel(startGameLabel);
+            }
+
+            // While the Settings or Credits screen is open, fade the title menu out so the cards read cleanly,
+            // then bring it back when Settings closes.
+            if (currentState != FlowState.StartMenu || startMenuPanelCG == null) return;
+            var menu = settingsMenu != null ? settingsMenu : JbelSettingsMenuController.Instance;
+            bool open = (menu != null && menu.IsOpen) || (creditsModal != null && creditsModal.IsOpen);
+            if (open) menuDimmedForSettings = true;
+            if (!menuDimmedForSettings) return;
+
+            startMenuPanelCG.alpha = Mathf.MoveTowards(startMenuPanelCG.alpha, open ? 0f : 1f, Time.unscaledDeltaTime * 6f);
+            startMenuPanelCG.blocksRaycasts = !open;
+            if (!open && startMenuPanelCG.alpha >= 1f)
+            {
+                startMenuPanelCG.blocksRaycasts = true;
+                menuDimmedForSettings = false;
+            }
         }
 
         private IEnumerator StartupSequenceRoutine()
@@ -388,6 +461,8 @@ namespace JbelIghoud.UI
         public void OnContinueClicked()
         {
             if (isTransitioning) return;
+            if (!JbelPlayerProfile.HasProfile) return;
+            JbelPlayerProfile.PendingNewGame = false;
             isTransitioning = true;
             Debug.Log("[JbelStartup] Continue clicked -> Triggering Hand Wave animation!");
             StartCoroutine(AnimateHandWaveAndTransition());
@@ -425,6 +500,18 @@ namespace JbelIghoud.UI
         public void OnModeSurvieClicked()
         {
             if (isTransitioning) return;
+
+            // An existing journey needs a second tap to be overwritten
+            if (JbelPlayerProfile.HasProfile && JbelPlayerProfile.IntroDone && newGameArmedUntil < 0f)
+            {
+                newGameArmedUntil = Time.unscaledTime + confirmWindow;
+                SetStartLabel(confirmNewGameLabel);
+                if (modeSurvieButton != null) StartCoroutine(PunchButtonScale(modeSurvieButton.transform, 1.08f, 0.18f));
+                return;
+            }
+            newGameArmedUntil = -1f;
+            SetStartLabel(startGameLabel);
+            JbelPlayerProfile.StartNewGame();
             isTransitioning = true;
             Debug.Log("[JbelStartup] Mode Survie clicked -> Triggering Spears Strike & Clash action!");
             StartCoroutine(AnimateSpearsClashAndTransition());
@@ -594,6 +681,15 @@ namespace JbelIghoud.UI
         {
             Debug.Log("[JbelStartup] Option clicked -> Rapid gear ratchet spin!");
             TriggerGearSpin(gearClickSpinDuration, gearClickSpinDegrees);
+
+            if (isTransitioning) return;
+            var menu = settingsMenu != null ? settingsMenu : JbelSettingsMenuController.Instance;
+            if (menu != null)
+            {
+                menu.OpenSettings(false);
+                // OpenSettings freezes time for in-game use; keep the title screen animations alive.
+                Time.timeScale = 1f;
+            }
         }
 
         public void TriggerGearSpin(float duration, float totalDegrees)
@@ -620,6 +716,8 @@ namespace JbelIghoud.UI
         public void OnCreditsClicked()
         {
             Debug.Log("[JbelStartup] Credits clicked!");
+            if (isTransitioning) return;
+            if (creditsModal != null) creditsModal.Show();
         }
 
         public void OnARClicked()

@@ -39,6 +39,31 @@ public class RockDragManager : MonoBehaviour
     [Tooltip("Scale of rocks when held in hands in first-person view.")]
     [SerializeField] private float handheldRockScale = 0.35f;
 
+    [Tooltip("Target on-screen size of a held rock in metres (rocks are normalised by their mesh size). 0 = use Handheld Rock Scale as-is.")]
+    [SerializeField] private float handheldRockSize = 0.24f;
+
+    [Header("Timing Strike (tap when the needle is in the green)")]
+    [SerializeField] private Sprite barFillSprite;
+    [SerializeField] private Sprite barGreenSprite;
+    [SerializeField] private Sprite barNeedleSprite;
+    [Tooltip("On: tap-timing bar. Off: the old drag-the-rocks-together gesture.")]
+    [SerializeField] private bool timingStrike = true;
+    [SerializeField] private float strongDamage = 2f;
+    [SerializeField] private float weakDamage = 0.4f;
+    [Tooltip("Needle sweeps per second at the first hit.")]
+    [SerializeField] private float startSpeed = 0.85f;
+    [SerializeField] private float speedGainPerHit = 1.16f;
+    [SerializeField] private float maxSpeed = 2.3f;
+    [Tooltip("Green zone width as a fraction of the bar at the first hit.")]
+    [SerializeField] private float startGreenWidth = 0.27f;
+    [SerializeField] private float greenShrinkPerHit = 0.86f;
+    [SerializeField] private float minGreenWidth = 0.09f;
+    private float needleT, needleDir = 1f, needleSpeed, greenCenter = 0.5f, greenWidth;
+    private bool hitAnimating;
+    private RectTransform barRT, greenRT, needleRT;
+    private TMPro.TextMeshProUGUI hitPopup;
+    private float popupTime;
+
     [Header("Smash Dynamics")]
     [Tooltip("Minimum impact speed to trigger a smash.")]
     [SerializeField] private float minSmashSpeed = 1.25f;
@@ -86,6 +111,13 @@ public class RockDragManager : MonoBehaviour
 
     // Cached HUD canvas references to toggle
     private GameObject mobileHudCanvas;
+
+    /// <summary>Raised on every strike: (striker, receiver, feedback text or null).</summary>
+    public event System.Action<RockItem, RockItem, string> OnStrike;
+    /// <summary>Raised right after first-person strike mode closes (put away, stone broken...).</summary>
+    public event System.Action OnSmashModeExited;
+    /// <summary>Hide the IMGUI title/instruction banner (tutorials show their own objective instead).</summary>
+    [HideInInspector] public bool showInstructionBanner = true;
 
     public bool IsInSmashMode => isInSmashMode;
     public RockItem LeftRock => rockLeft;
@@ -210,7 +242,11 @@ public class RockDragManager : MonoBehaviour
         // Hide 3rd person mobile controls while in smash minigame
         ToggleThirdPersonHUD(false);
 
-        ShowStatus("💥 Drag rocks horizontally to smash them together!", 3.5f);
+        ShowSmashUI(true);
+        HideHudButtons(true);
+        HideNearbyActors(true);
+        ResetTimingBar();
+        JbelImpactFX.EnsureListener(fpCamera);
         Debug.Log("<color=#4CD964><b>[RockDragManager]</b></color> Entered First-Person Rock Smashing Mode.");
     }
 
@@ -242,7 +278,10 @@ public class RockDragManager : MonoBehaviour
         // Restore 3rd person mobile controls
         ToggleThirdPersonHUD(true);
 
-        ShowStatus("Returned to exploration.", 2.0f);
+        ShowSmashUI(false);
+        HideHudButtons(false);
+        HideNearbyActors(false);
+        OnSmashModeExited?.Invoke();
         Debug.Log("<color=#64D2FF><b>[RockDragManager]</b></color> Exited First-Person Rock Smashing Mode.");
     }
 
@@ -284,12 +323,16 @@ public class RockDragManager : MonoBehaviour
         prevLeftX = currentLeftX;
         prevRightX = currentRightX;
 
-        // Handle inputs
-        HandleTouchInput();
-        HandleMouseAndKeyboardInput();
+        if (timingStrike) UpdateTimingStrike();
+        else
+        {
+            // Handle inputs
+            HandleTouchInput();
+            HandleMouseAndKeyboardInput();
 
-        // Check 1D collision along X axis
-        Check1DCollision();
+            // Check 1D collision along X axis
+            Check1DCollision();
+        }
 
         // Update screen shake
         UpdateScreenShake();
@@ -300,6 +343,7 @@ public class RockDragManager : MonoBehaviour
 
     private void LateUpdate()
     {
+        Update_SmashUI();
         if (!isInSmashMode) return;
         if (mainCamera == null) mainCamera = Camera.main;
 
@@ -541,11 +585,18 @@ public class RockDragManager : MonoBehaviour
         // Visual contact midpoint in world
         Vector3 contactMid = (rockLeft.transform.position + rockRight.transform.position) * 0.5f;
 
-        // Visual spark effect
-        SpawnSmashVFX(contactMid);
+        // Impact feedback scaled by the stones' hardness: particles, sound, haptics, camera shake, hit-stop
+        {
+            float hA = rockLeft.rockData != null ? rockLeft.rockData.hardness : rockLeft.strength;
+            float hB = rockRight.rockData != null ? rockRight.rockData.hardness : rockRight.strength;
+            RockItem softer = hA <= hB ? rockLeft : rockRight;
+            Color dust = softer.rockData != null ? softer.rockData.residueColor : Color.gray;
+            JbelImpactFX.Strike(contactMid, hA, hB, dust, Mathf.Clamp(impactSpeed / 4f, 0.5f, 1.3f));
+        }
 
-        // Screen shake
-        shakeIntensity = 0.045f;
+        // Hands jolt (the world shake comes from the camera impulse)
+        shakeIntensity = 0.02f;
+        if (smashHint != null) smashHintSeen = true;
 
         // Evaluate impact using Prehistoric Lithic Matrix if RockData is available
         var matrix = Resources.Load<JbelIghoud.Lithic.RockInteractionMatrix>("DefaultRockInteractionMatrix");
@@ -581,6 +632,11 @@ public class RockDragManager : MonoBehaviour
             // Apply hits to both rocks according to durability rules
             rockLeft.TakeHit();
             rockRight.TakeHit();
+        }
+
+        {
+            bool lf = Mathf.Abs(leftVelocity) >= Mathf.Abs(rightVelocity);
+            OnStrike?.Invoke(lf ? rockLeft : rockRight, lf ? rockRight : rockLeft, outcomeMessage);
         }
 
         // Check if one or both rocks were shattered
@@ -629,14 +685,13 @@ public class RockDragManager : MonoBehaviour
         Vector3 leftLocalPos = new Vector3(currentLeftX, viewHeight, viewDepth) + shakeOffset;
         Vector3 rightLocalPos = new Vector3(currentRightX, viewHeight, viewDepth) + shakeOffset;
 
-        Vector3 targetScale = Vector3.one * handheldRockScale;
 
         if (rockLeft != null)
         {
             rockLeft.transform.position = mainCamera.transform.TransformPoint(leftLocalPos);
             // Slight tilt inwards towards each other
             rockLeft.transform.rotation = mainCamera.transform.rotation * Quaternion.Euler(10f, 25f, -15f);
-            rockLeft.transform.localScale = Vector3.Lerp(rockLeft.transform.localScale, targetScale, 15f * Time.deltaTime);
+            rockLeft.transform.localScale = Vector3.Lerp(rockLeft.transform.localScale, HandheldScale(rockLeft), 15f * Time.deltaTime);
         }
 
         if (rockRight != null)
@@ -644,8 +699,213 @@ public class RockDragManager : MonoBehaviour
             rockRight.transform.position = mainCamera.transform.TransformPoint(rightLocalPos);
             // Slight tilt inwards towards each other
             rockRight.transform.rotation = mainCamera.transform.rotation * Quaternion.Euler(10f, -25f, 15f);
-            rockRight.transform.localScale = Vector3.Lerp(rockRight.transform.localScale, targetScale, 15f * Time.deltaTime);
+            rockRight.transform.localScale = Vector3.Lerp(rockRight.transform.localScale, HandheldScale(rockRight), 15f * Time.deltaTime);
         }
+    }
+
+    // ================================================================== TIMING STRIKE
+
+    private readonly List<Renderer> hiddenActors = new List<Renderer>();
+
+    /// <summary>Hide characters standing right in front of the first-person view (e.g. the Elder).</summary>
+    private void HideNearbyActors(bool hide)
+    {
+        if (!hide)
+        {
+            foreach (var r in hiddenActors) if (r != null) r.enabled = true;
+            hiddenActors.Clear();
+            return;
+        }
+        var cam = mainCamera != null ? mainCamera : Camera.main;
+        if (cam == null) return;
+        foreach (var a in FindObjectsByType<Animator>(FindObjectsSortMode.None))
+        {
+            if (player != null && a.transform.IsChildOf(player.transform)) continue;
+            Vector3 to = a.transform.position - cam.transform.position;
+            if (to.magnitude > 8f || Vector3.Dot(to.normalized, cam.transform.forward) < 0.3f) continue; // only people in front of the view
+            foreach (var r in a.transform.root.GetComponentsInChildren<Renderer>())
+                if (r.enabled && !(r is ParticleSystemRenderer)) { r.enabled = false; hiddenActors.Add(r); }
+        }
+    }
+
+    private void ResetTimingBar()
+    {
+        needleT = 0f; needleDir = 1f;
+        needleSpeed = startSpeed;
+        greenWidth = startGreenWidth;
+        greenCenter = Random.Range(0.3f, 0.7f);
+        hitAnimating = false;
+        currentLeftX = leftRestX; currentRightX = rightRestX;
+        LayoutBar();
+    }
+
+    private void BuildTimingBar(TMPro.TMP_FontAsset font)
+    {
+        Sprite fill = null, green = null, needle = null;
+#if UNITY_EDITOR
+        fill = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/UI/breaking the rocks/fill.png");
+        green = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/UI/breaking the rocks/green zone.png");
+        needle = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/UI/breaking the rocks/moving vertex.png");
+#endif
+        if (barFillSprite != null) fill = barFillSprite;
+        if (barGreenSprite != null) green = barGreenSprite;
+        if (barNeedleSprite != null) needle = barNeedleSprite;
+
+        var bar = new GameObject("TimingBar", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+        bar.transform.SetParent(smashUI.transform, false);
+        barRT = (RectTransform)bar.transform;
+        barRT.anchorMin = barRT.anchorMax = barRT.pivot = new Vector2(0.5f, 0f);
+        barRT.anchoredPosition = new Vector2(0f, 150f);
+        barRT.sizeDelta = new Vector2(880f, 55f);
+        var bi = bar.GetComponent<UnityEngine.UI.Image>(); bi.sprite = fill; bi.raycastTarget = false;
+        if (fill == null) bi.color = new Color(0.72f, 0.45f, 0.21f);
+
+        var g = new GameObject("GreenZone", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+        g.transform.SetParent(bar.transform, false);
+        greenRT = (RectTransform)g.transform;
+        greenRT.anchorMin = new Vector2(0f, 0f); greenRT.anchorMax = new Vector2(0f, 1f); greenRT.pivot = new Vector2(0.5f, 0.5f);
+        var gi = g.GetComponent<UnityEngine.UI.Image>(); gi.sprite = green; gi.raycastTarget = false;
+        if (green == null) gi.color = new Color(0.4f, 0.75f, 0.33f);
+
+        var nd = new GameObject("Needle", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+        nd.transform.SetParent(bar.transform, false);
+        needleRT = (RectTransform)nd.transform;
+        needleRT.anchorMin = needleRT.anchorMax = new Vector2(0f, 0.5f); needleRT.pivot = new Vector2(0.5f, 0.5f);
+        needleRT.sizeDelta = new Vector2(26f, 104f);
+        var ni = nd.GetComponent<UnityEngine.UI.Image>(); ni.sprite = needle; ni.raycastTarget = false;
+        if (needle == null) ni.color = new Color(0.97f, 0.94f, 0.86f);
+
+        var pop = new GameObject("HitPopup", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI));
+        pop.transform.SetParent(bar.transform, false);
+        var prt = (RectTransform)pop.transform;
+        prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 1f); prt.pivot = new Vector2(0.5f, 0f);
+        prt.anchoredPosition = new Vector2(0f, 40f); prt.sizeDelta = new Vector2(600f, 70f);
+        hitPopup = pop.GetComponent<TMPro.TextMeshProUGUI>();
+        if (font != null) hitPopup.font = font;
+        hitPopup.fontSize = 46f; hitPopup.alignment = TMPro.TextAlignmentOptions.Center; hitPopup.raycastTarget = false;
+        hitPopup.color = new Color(1f, 1f, 1f, 0f);
+        if (smashHint != null) ((RectTransform)smashHint.transform).anchoredPosition = new Vector2(0f, 225f);
+        LayoutBar();
+    }
+
+    private void LayoutBar()
+    {
+        if (barRT == null) return;
+        float w = barRT.rect.width > 1f ? barRT.rect.width : barRT.sizeDelta.x;
+        greenRT.sizeDelta = new Vector2(w * greenWidth, 0f);
+        greenRT.anchoredPosition = new Vector2(w * greenCenter, 0f);
+        needleRT.anchoredPosition = new Vector2(w * needleT, 0f);
+    }
+
+    private void UpdateTimingStrike()
+    {
+        if (barRT != null) barRT.gameObject.SetActive(isInSmashMode);
+        if (!isResolvingSmash && !hitAnimating)
+        {
+            needleT += needleDir * needleSpeed * Time.unscaledDeltaTime;
+            if (needleT >= 1f) { needleT = 1f; needleDir = -1f; }
+            else if (needleT <= 0f) { needleT = 0f; needleDir = 1f; }
+            if (TapThisFrame()) TimingHit();
+        }
+        LayoutBar();
+        if (hitPopup != null && popupTime > 0f)
+        {
+            popupTime -= Time.unscaledDeltaTime;
+            var c = hitPopup.color; c.a = Mathf.Clamp01(popupTime / 0.35f); hitPopup.color = c;
+            ((RectTransform)hitPopup.transform).anchoredPosition = new Vector2(0f, 40f + (0.8f - popupTime) * 50f);
+        }
+    }
+
+    /// <summary>A tap anywhere that isn't on a button (e.g. PUT AWAY). Space works in the editor.</summary>
+    private bool TapThisFrame()
+    {
+        Vector2 pos = default; bool tapped = false;
+        foreach (var t in Touch.activeTouches)
+            if (t.phase == UnityEngine.InputSystem.TouchPhase.Began) { pos = t.screenPosition; tapped = true; break; }
+        if (!tapped && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) { pos = Mouse.current.position.ReadValue(); tapped = true; }
+        if (!tapped && Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame) return true;
+        if (!tapped) return false;
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es != null)
+        {
+            var data = new UnityEngine.EventSystems.PointerEventData(es) { position = pos };
+            var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+            es.RaycastAll(data, hits);
+            foreach (var h in hits) if (h.gameObject.GetComponentInParent<UnityEngine.UI.Button>() != null) return false;
+        }
+        return true;
+    }
+
+    private void TimingHit()
+    {
+        if (rockLeft == null || rockRight == null) return;
+        bool strong = Mathf.Abs(needleT - greenCenter) <= greenWidth * 0.5f;
+        StartCoroutine(TimedHitRoutine(strong));
+    }
+
+    private IEnumerator TimedHitRoutine(bool strong)
+    {
+        hitAnimating = true;
+        // the hammer (right) swings into the stone (left)
+        float contactX = currentLeftX + minCollisionDistance;
+        float wind = rightRestX + 0.12f;
+        for (float t = 0f; t < 0.08f; t += Time.unscaledDeltaTime) { currentRightX = Mathf.Lerp(rightRestX, wind, t / 0.08f); yield return null; }
+        for (float t = 0f; t < 0.07f; t += Time.unscaledDeltaTime) { float k = t / 0.07f; currentRightX = Mathf.Lerp(wind, contactX, k * k); yield return null; }
+        currentRightX = contactX;
+        ResolveTimedImpact(strong);
+        // bounce back
+        for (float t = 0f; t < 0.18f; t += Time.unscaledDeltaTime) { currentRightX = Mathf.Lerp(contactX, rightRestX, Mathf.SmoothStep(0f, 1f, t / 0.18f)); yield return null; }
+        currentRightX = rightRestX;
+        currentLeftX = leftRestX;
+        // every hit: faster needle, smaller green zone
+        needleSpeed = Mathf.Min(maxSpeed, needleSpeed * speedGainPerHit);
+        greenWidth = Mathf.Max(minGreenWidth, greenWidth * greenShrinkPerHit);
+        greenCenter = Random.Range(0.15f + greenWidth * 0.5f, 0.85f - greenWidth * 0.5f);
+        hitAnimating = false;
+    }
+
+    private void ResolveTimedImpact(bool strong)
+    {
+        if (rockLeft == null || rockRight == null) return;
+        lastSmashTimestamp = Time.time;
+        Vector3 contactMid = (rockLeft.transform.position + rockRight.transform.position) * 0.5f;
+        float hA = rockLeft.rockData != null ? rockLeft.rockData.hardness : rockLeft.strength;
+        float hB = rockRight.rockData != null ? rockRight.rockData.hardness : rockRight.strength;
+        RockItem softer = hA <= hB ? rockLeft : rockRight;
+        Color dust = softer.rockData != null ? softer.rockData.residueColor : Color.gray;
+        JbelImpactFX.Strike(contactMid, hA, hB, dust, strong ? 1.3f : 0.55f);
+        shakeIntensity = strong ? 0.03f : 0.012f;
+
+        if (hitPopup != null)
+        {
+            hitPopup.text = strong ? "STRONG HIT  +2" : "WEAK  +0.4";
+            hitPopup.color = strong ? new Color(0.55f, 0.95f, 0.45f, 1f) : new Color(0.96f, 0.86f, 0.6f, 1f);
+            popupTime = 0.8f;
+        }
+        OnStrike?.Invoke(rockRight, rockLeft, null);
+
+        float dmg = strong ? strongDamage : weakDamage;
+        // the stone being broken is the one on the left; a non-hammer right stone wears too
+        rockLeft.TakeDamage(dmg);
+        if (rockRight != null && !rockRight.isHammerstone) rockRight.TakeDamage(dmg * 0.5f);
+
+        bool leftDestroyed = rockLeft == null || rockLeft.HitsRemaining <= 0;
+        bool rightDestroyed = rockRight == null || rockRight.HitsRemaining <= 0;
+        if (leftDestroyed || rightDestroyed)
+        {
+            isResolvingSmash = true;
+            StartCoroutine(PostSmashCompletionRoutine());
+        }
+    }
+
+    /// <summary>Same visual size in hand whatever the rock mesh's raw scale is.</summary>
+    private Vector3 HandheldScale(RockItem rock)
+    {
+        if (handheldRockSize <= 0f) return Vector3.one * handheldRockScale;
+        var mf = rock.GetComponent<MeshFilter>();
+        float meshSize = (mf != null && mf.sharedMesh != null) ? mf.sharedMesh.bounds.size.magnitude : 0f;
+        if (meshSize < 0.0001f) return Vector3.one * handheldRockScale;
+        return Vector3.one * (handheldRockSize / meshSize);
     }
 
     private void UpdateScreenShake()
@@ -657,7 +917,7 @@ public class RockDragManager : MonoBehaviour
                 Random.Range(-shakeIntensity, shakeIntensity),
                 Random.Range(-shakeIntensity * 0.5f, 0f)
             );
-            shakeIntensity = Mathf.MoveTowards(shakeIntensity, 0f, 0.25f * Time.deltaTime);
+            shakeIntensity *= Mathf.Exp(-18f * Time.unscaledDeltaTime);
         }
         else
         {
@@ -665,24 +925,7 @@ public class RockDragManager : MonoBehaviour
         }
     }
 
-    private void SpawnSmashVFX(Vector3 pos)
-    {
-        GameObject spark = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        spark.name = "SmashFlashVFX";
-        spark.transform.position = pos;
-        spark.transform.localScale = Vector3.one * 0.45f;
-
-        Collider col = spark.GetComponent<Collider>();
-        if (col != null) Destroy(col);
-
-        Renderer rend = spark.GetComponent<Renderer>();
-        if (rend != null)
-        {
-            rend.material.color = new Color(1f, 0.85f, 0.2f);
-        }
-
-        Destroy(spark, 0.2f);
-    }
+    private void SpawnSmashVFX(Vector3 pos) { } // replaced by JbelImpactFX
 
     private void ShowStatus(string msg, float duration)
     {
@@ -690,66 +933,88 @@ public class RockDragManager : MonoBehaviour
         statusTimer = duration;
     }
 
-    private void OnGUI()
+    // ================================================================== SMASH UI (uGUI, game style)
+    private GameObject smashUI;
+    private TMPro.TextMeshProUGUI smashHint;
+    private bool smashHintSeen;
+    private readonly System.Collections.Generic.List<GameObject> hiddenHud = new System.Collections.Generic.List<GameObject>();
+
+    private void ShowSmashUI(bool show)
     {
-        if (!isInSmashMode) return;
+        if (show && smashUI == null) BuildSmashUI();
+        if (smashUI != null) smashUI.SetActive(show);
+        if (show) smashHintSeen = false;
+    }
 
-        // 1. Top Instruction Banner
-        float bannerW = Mathf.Min(480f, Screen.width * 0.85f);
-        float bannerH = 68f;
-        float bannerX = (Screen.width - bannerW) * 0.5f;
-        float bannerY = 20f;
+    private void BuildSmashUI()
+    {
+        smashUI = new GameObject("SmashUI", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.CanvasScaler), typeof(UnityEngine.UI.GraphicRaycaster));
+        DontDestroyOnLoad(smashUI);
+        var canvas = smashUI.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 45;
+        var scaler = smashUI.GetComponent<UnityEngine.UI.CanvasScaler>();
+        scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.matchWidthOrHeight = 0.5f;
 
-        Rect bannerRect = new Rect(bannerX, bannerY, bannerW, bannerH);
-        GUI.color = new Color(0.08f, 0.12f, 0.18f, 0.88f);
-        GUI.Box(bannerRect, GUIContent.none);
-        GUI.color = Color.white;
-
-        GUIStyle titleStyle = new GUIStyle(GUI.skin.label)
+        // PUT AWAY: a copy of the HUD's BAG button so it matches the game's style
+        var hud = FindAnyObjectByType<JbelIghoud.UI.JbelHUDController>();
+        TMPro.TMP_FontAsset font = null;
+        if (hud != null && hud.BagButton != null)
         {
-            alignment = TextAnchor.UpperCenter,
-            fontSize = 16,
-            fontStyle = FontStyle.Bold
-        };
-        titleStyle.normal.textColor = new Color(1f, 0.85f, 0.25f);
-        GUI.Label(new Rect(bannerX, bannerY + 6, bannerW, 24), " FIRST-PERSON ROCK SMASH", titleStyle);
-
-        GUIStyle subStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.LowerCenter,
-            fontSize = 13,
-            fontStyle = FontStyle.Normal
-        };
-        subStyle.normal.textColor = Color.white;
-        string subText = string.IsNullOrEmpty(statusMessage) || statusTimer <= 0f
-            ? "Swipe rocks horizontally with your fingers to strike them!"
-            : statusMessage;
-        GUI.Label(new Rect(bannerX, bannerY + 30, bannerW, 30), subText, subStyle);
-
-        // 2. Drag Guidance Arrows
-        GUIStyle arrowStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = 24,
-            fontStyle = FontStyle.Bold
-        };
-        arrowStyle.normal.textColor = new Color(1f, 1f, 1f, 0.45f);
-
-        float arrowY = Screen.height * 0.55f;
-        GUI.Label(new Rect(Screen.width * 0.18f, arrowY, 140, 40), "▶ ▶ DRAG", arrowStyle);
-        GUI.Label(new Rect(Screen.width * 0.82f - 140, arrowY, 140, 40), "DRAG ◀ ◀", arrowStyle);
-
-        // 3. Put Away / Exit Button in Top-Right Corner
-        float exitW = 120f;
-        float exitH = 40f;
-        float exitX = Screen.width - exitW - 20f;
-        float exitY = 20f;
-
-        GUI.backgroundColor = new Color(0.85f, 0.25f, 0.25f, 0.9f);
-        if (GUI.Button(new Rect(exitX, exitY, exitW, exitH), "✕ Put Away"))
-        {
-            ExitFirstPersonSmashMode();
+            var b = JbelIghoud.UI.JbelHudButtonFactory.Create(hud.BagButton, smashUI.transform, "PutAwayButton", "PUT AWAY");
+            var rt = (RectTransform)b.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = new Vector2(-70f, 60f);
+            b.onClick.AddListener(ExitFirstPersonSmashMode);
         }
-        GUI.backgroundColor = Color.white;
+        font = JbelIghoud.UI.JbelHudButtonFactory.HudFont();
+
+        // gesture hint (hidden during tutorials: the objective banner says what to do)
+        var hintGo = new GameObject("Hint", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI));
+        hintGo.transform.SetParent(smashUI.transform, false);
+        var hrt = (RectTransform)hintGo.transform;
+        hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0.5f, 0f);
+        hrt.anchoredPosition = new Vector2(0f, 70f);
+        hrt.sizeDelta = new Vector2(900f, 60f);
+        smashHint = hintGo.GetComponent<TMPro.TextMeshProUGUI>();
+        if (font != null) smashHint.font = font;
+        smashHint.text = timingStrike ? "TAP WHEN THE MARK IS IN THE GREEN" : "DRAG THE STONES INTO EACH OTHER";
+        BuildTimingBar(font);
+        smashHint.fontSize = 34f;
+        smashHint.alignment = TMPro.TextAlignmentOptions.Center;
+        smashHint.color = new Color(0.96f, 0.86f, 0.6f, 0.9f);
+        smashHint.raycastTarget = false;
+    }
+
+    private void Update_SmashUI()
+    {
+        if (smashHint == null) return;
+        float target = (isInSmashMode && showInstructionBanner && !smashHintSeen) ? 0.9f : 0f;
+        var c = smashHint.color;
+        c.a = Mathf.MoveTowards(c.a, target, Time.unscaledDeltaTime * 3f);
+        smashHint.color = c;
+    }
+
+    /// <summary>Hide every HUD action button (JUMP / MAP / COLLECT / BAG / TALK / STORE) while striking.</summary>
+    private void HideHudButtons(bool hide)
+    {
+        if (!hide)
+        {
+            foreach (var g in hiddenHud) if (g != null) g.SetActive(true);
+            hiddenHud.Clear();
+            return;
+        }
+        if (mobileHudCanvas == null) mobileHudCanvas = GameObject.Find("MobileHUD_Canvas");
+        if (mobileHudCanvas == null) return;
+        string[] keys = { "Jump", "Map", "Collect", "Bag", "Talk", "ReturnToInventory", "Dive", "PutDown" };
+        foreach (var b in mobileHudCanvas.GetComponentsInChildren<UnityEngine.UI.Button>(false))
+        {
+            string n = b.gameObject.name;
+            if (n.Contains("Modal") || n.Contains("Close")) continue;
+            foreach (var k in keys)
+                if (n.Contains(k)) { b.gameObject.SetActive(false); hiddenHud.Add(b.gameObject); break; }
+        }
     }
 }

@@ -322,6 +322,7 @@ public class InventoryUI : MonoBehaviour
             returnToInvButton.onClick.AddListener(OnReturnHeldRockToInventoryClicked);
 
             if (returnToInvText == null) returnToInvText = returnToInvButtonObj.GetComponentInChildren<TextMeshProUGUI>();
+            StyleReturnToInvButton();
             returnToInvButtonObj.SetActive(false);
             return;
         }
@@ -377,7 +378,44 @@ public class InventoryUI : MonoBehaviour
         returnToInvText.raycastTarget = false;
         returnToInvText.text = "<color=#F6C878><b>STORE IN SATCHEL</b></color>\n<size=12><color=#A8D5BA>Return held rock to inventory [R]</color></size>";
 
+        StyleReturnToInvButton();
         returnToInvButtonObj.SetActive(false);
+    }
+
+    /// <summary>
+    /// STORE button in the same round style as the HUD's BAG button (built as a copy of it),
+    /// placed right next to BAG. No icon, no PC key hint.
+    /// </summary>
+    private void StyleReturnToInvButton()
+    {
+        if (returnToInvButtonObj == null) return;
+        var hud = FindAnyObjectByType<JbelIghoud.UI.JbelHUDController>();
+        Button bag = hud != null ? hud.BagButton : null;
+        if (bag == null)
+        {
+            // fallback: keep the old button but drop the icon and the key hint
+            var icon = returnToInvButtonObj.transform.Find("Icon");
+            if (icon != null) Destroy(icon.gameObject);
+            if (returnToInvText == null) returnToInvText = returnToInvButtonObj.GetComponentInChildren<TextMeshProUGUI>();
+            if (returnToInvText != null) { returnToInvText.text = "STORE"; returnToInvText.alignment = TextAlignmentOptions.Center; returnToInvText.rectTransform.offsetMin = returnToInvText.rectTransform.offsetMax = Vector2.zero; }
+            return;
+        }
+
+        bool wasActive = returnToInvButtonObj.activeSelf;
+        var btn = JbelIghoud.UI.JbelHudButtonFactory.Create(bag, bag.transform.parent, "ReturnToInventoryButton", "STORE");
+        var clone = btn.gameObject;
+        var bagRT = (RectTransform)bag.transform;
+        var rt = (RectTransform)clone.transform;
+        float w = bagRT.rect.width > 1f ? bagRT.rect.width : 150f;
+        rt.anchoredPosition = bagRT.anchoredPosition + new Vector2(-w * 1.15f, 0f);
+        btn.onClick.AddListener(OnReturnHeldRockToInventoryClicked);
+        var txt = clone.GetComponentInChildren<TextMeshProUGUI>(true);
+
+        Destroy(returnToInvButtonObj);
+        returnToInvButtonObj = clone;
+        returnToInvButton = btn;
+        returnToInvText = txt;
+        returnToInvButtonObj.SetActive(wasActive);
     }
 
     public void OnReturnHeldRockToInventoryClicked()
@@ -387,6 +425,9 @@ public class InventoryUI : MonoBehaviour
 
         RockItem heldRock = player.HeldRocks[player.HeldRocks.Count - 1];
         if (heldRock == null) return;
+
+        // stored in the bag = off the equipment bar
+        if (JbelIghoud.UI.JbelHotbar.Instance != null) JbelIghoud.UI.JbelHotbar.Instance.ForgetPin(heldRock);
 
         if (InventoryManager.Instance != null && !InventoryManager.Instance.CanAddItem(heldRock))
         {
@@ -1294,6 +1335,7 @@ public class InventoryUI : MonoBehaviour
 
     public void OpenInventory()
     {
+        if (JbelIghoud.UI.JbelSamplesInventoryModal.Instance != null) return; // old satchel UI disabled
         isOpen = true;
 
         if (player == null) player = FindAnyObjectByType<TopDownPlayerController>();
@@ -1328,7 +1370,8 @@ public class InventoryUI : MonoBehaviour
         if (returnToInvButtonObj != null)
         {
             bool hasHeldRock = player != null && player.HeldRockCount > 0;
-            bool shouldShowReturnBtn = hasHeldRock && !isOpen && (RockInspectionManager.Instance == null || !RockInspectionManager.Instance.IsInspecting);
+            bool shouldShowReturnBtn = hasHeldRock && !isOpen && (RockInspectionManager.Instance == null || !RockInspectionManager.Instance.IsInspecting)
+                && (RockDragManager.Instance == null || !RockDragManager.Instance.IsInSmashMode);
             if (returnToInvButtonObj.activeSelf != shouldShowReturnBtn)
             {
                 returnToInvButtonObj.SetActive(shouldShowReturnBtn);
@@ -1339,7 +1382,7 @@ public class InventoryUI : MonoBehaviour
 #if ENABLE_INPUT_SYSTEM
         if (Keyboard.current != null)
         {
-            if (Keyboard.current.iKey.wasPressedThisFrame || Keyboard.current.tabKey.wasPressedThisFrame)
+            if (false && (Keyboard.current.iKey.wasPressedThisFrame || Keyboard.current.tabKey.wasPressedThisFrame))
             {
                 ToggleInventory();
             }
@@ -1353,7 +1396,7 @@ public class InventoryUI : MonoBehaviour
             }
         }
 #else
-        if (Input.GetKeyDown(KeyCode.I) || Input.GetKeyDown(KeyCode.Tab))
+        if (false && (Input.GetKeyDown(KeyCode.I) || Input.GetKeyDown(KeyCode.Tab)))
         {
             ToggleInventory();
         }

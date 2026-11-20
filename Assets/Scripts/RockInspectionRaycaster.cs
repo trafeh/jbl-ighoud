@@ -64,7 +64,7 @@ public class RockInspectionRaycaster : MonoBehaviour
     {
         if (_instance != null && _instance != this)
         {
-            Destroy(gameObject);
+            Destroy(this); // never destroy the host (shared HUD canvas)
             return;
         }
         _instance = this;
@@ -144,11 +144,12 @@ public class RockInspectionRaycaster : MonoBehaviour
 
         // Setup dedicated right-thumb InspectButton on the mobile HUD
         SetupInspectHUDButton(hudCanvas);
+        if (DisableInspection && reticleUI != null) reticleUI.SetActive(false);
     }
 
     private void SetupInspectHUDButton(Canvas hudCanvas)
     {
-        if (hudCanvas == null) return;
+        if (DisableInspection || hudCanvas == null) return;
 
         Transform existingInspect = hudCanvas.transform.Find("InspectButton");
         GameObject inspGo = null;
@@ -207,8 +208,17 @@ public class RockInspectionRaycaster : MonoBehaviour
         inspGo.SetActive(false);
     }
 
+    private const bool DisableInspection = true; // collect via the COLLECT button only
+
     private void Update()
     {
+        if (DisableInspection)
+        {
+            if (reticleUI != null && reticleUI.activeSelf) reticleUI.SetActive(false);
+            var stray = GameObject.Find("RockTargetPrompt");
+            if (stray != null) stray.SetActive(false);
+            return;
+        }
         if (mainCamera == null)
         {
             mainCamera = Camera.main;

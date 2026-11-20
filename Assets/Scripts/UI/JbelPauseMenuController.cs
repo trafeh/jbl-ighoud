@@ -87,6 +87,8 @@ namespace JbelIghoud.UI
             _instance = this;
 
             totalSessionSeconds = initialPlaytimeMinutes * 60f;
+            isPaused = false;
+            Time.timeScale = 1f;
 
             // Auto-heal serialized references if missing
             if (pauseModalCG == null) pauseModalCG = GetComponent<CanvasGroup>();
@@ -151,6 +153,8 @@ namespace JbelIghoud.UI
 
         private void Start()
         {
+            isPaused = false;
+            Time.timeScale = 1f;
             // Keep GameObject active so Awake and Update run, but set alpha to 0 and disable raycasts
             if (pauseModalCG != null)
             {
@@ -325,12 +329,40 @@ namespace JbelIghoud.UI
         private void OnMapClicked()
         {
             Debug.Log("[JbelPause] Map clicked from Pause Menu.");
-            ResumeGame();
+            var map = JbelIghoud.UI.JbelMapMenuController.Instance;
+            if (map != null) map.OpenMap(true); else ResumeGame();
+        }
+
+        public void HideForSubmenu()
+        {
+            if (modalAnimCoroutine != null) StopCoroutine(modalAnimCoroutine);
+            if (pauseModalCG != null)
+            {
+                pauseModalCG.alpha = 0f;
+                pauseModalCG.blocksRaycasts = false;
+                pauseModalCG.interactable = false;
+            }
+        }
+
+        public void ShowFromSubmenu()
+        {
+            if (modalAnimCoroutine != null) StopCoroutine(modalAnimCoroutine);
+            if (pauseModalCG != null)
+            {
+                pauseModalCG.alpha = 1f;
+                pauseModalCG.blocksRaycasts = true;
+                pauseModalCG.interactable = true;
+            }
         }
 
         private void OnSettingClicked()
         {
             Debug.Log("[JbelPause] Setting clicked from Pause Menu.");
+            HideForSubmenu();
+            if (JbelSettingsMenuController.Instance != null)
+            {
+                JbelSettingsMenuController.Instance.OpenSettings(fromPause: true);
+            }
         }
 
         public void ReturnToMainMenu()

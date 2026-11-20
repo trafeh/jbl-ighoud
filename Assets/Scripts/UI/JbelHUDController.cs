@@ -39,6 +39,8 @@ namespace JbelIghoud.UI
         [Header("--- Bottom-Right: Action Buttons ---")]
         [SerializeField] private Button collectButton;
         [SerializeField] private Button bagButton;
+        /// <summary>The BAG button (used by tutorials to highlight it).</summary>
+        public Button BagButton => bagButton;
         [SerializeField] private Button mapButton;
         [SerializeField] private CanvasGroup collectCanvasGroup;
 
@@ -64,7 +66,7 @@ namespace JbelIghoud.UI
         {
             if (_instance != null && _instance != this)
             {
-                Destroy(gameObject);
+                Destroy(this); // never destroy the host (shared HUD canvas)
                 return;
             }
             _instance = this;
@@ -105,6 +107,15 @@ namespace JbelIghoud.UI
                 inventoryManager.OnInventoryChanged += UpdateInventoryDisplay;
             }
 
+            // Always start with the HUD visible (menus may have left it hidden in the saved scene)
+            var hudGroup = GetComponent<CanvasGroup>();
+            if (hudGroup != null)
+            {
+                hudGroup.alpha = 1f;
+                hudGroup.blocksRaycasts = true;
+                hudGroup.interactable = true;
+            }
+
             InitializeDefaults();
             UpdateAllDisplays();
         }
@@ -119,10 +130,11 @@ namespace JbelIghoud.UI
 
         private void InitializeDefaults()
         {
-            if (survivorNameText != null) survivorNameText.text = defaultSurvivorName;
-            if (levelText != null) levelText.text = defaultLevelName;
-            if (xpBarFill != null) xpBarFill.fillAmount = defaultXPProgress;
-            if (questText != null) questText.text = defaultQuestText;
+            // Name / level / XP / objective come from the saved player profile (see JbelObjectiveHUD)
+            if (survivorNameText != null) survivorNameText.text = JbelIghoud.Game.JbelPlayerProfile.PlayerName;
+            if (levelText != null) levelText.text = "NIVEAU " + JbelIghoud.Game.JbelPlayerProfile.Level;
+            if (xpBarFill != null) xpBarFill.fillAmount = JbelIghoud.Game.JbelPlayerProfile.XPProgress01;
+            if (questText != null && FindAnyObjectByType<JbelIghoud.Game.JbelObjectiveHUD>() == null) questText.text = defaultQuestText;
             if (goldCountText != null) goldCountText.text = goldCount.ToString();
         }
 
@@ -172,8 +184,8 @@ namespace JbelIghoud.UI
             if (collectButton == null) return;
 
             // Highlight / pulse collect button when interactable is near
-            GameObject pickBtnObj = GameObject.Find("PickButton");
-            bool canCollect = pickBtnObj != null && pickBtnObj.activeInHierarchy;
+            if (Time.unscaledTime >= nextCollectCheck) { nextCollectCheck = Time.unscaledTime + 0.25f; cachedCanCollect = FindNearestCollectableRock() != null; }
+            bool canCollect = cachedCanCollect;
 
             if (collectCanvasGroup != null)
             {
@@ -219,25 +231,43 @@ namespace JbelIghoud.UI
             if (stoneCountText != null) stoneCountText.text = amount.ToString();
         }
 
+        private const float CollectRadius = 4.5f;
+        private float nextCollectCheck;
+        private bool cachedCanCollect;
+
+        private RockItem FindNearestCollectableRock()
+        {
+            if (playerController == null) playerController = FindAnyObjectByType<TopDownPlayerController>();
+            if (playerController == null) return null;
+            Vector3 pp = playerController.transform.position;
+            RockItem best = null;
+            float bestD = CollectRadius;
+            var rocks = FindObjectsByType<RockItem>(FindObjectsSortMode.None);
+            for (int i = 0; i < rocks.Length; i++)
+            {
+                var r = rocks[i];
+                if (r == null || !r.gameObject.activeInHierarchy) continue;
+                
+                float d = Vector3.Distance(pp, r.transform.position);
+                if (d < bestD) { bestD = d; best = r; }
+            }
+            return best;
+        }
+
         private void OnCollectClicked()
         {
-            // Forward click to existing PickButton if available
-            GameObject pickBtnObj = GameObject.Find("PickButton");
-            if (pickBtnObj != null)
+            if (inventoryManager == null) inventoryManager = InventoryManager.Instance;
+            RockItem rock = FindNearestCollectableRock();
+            if (rock != null && inventoryManager != null)
             {
-                Button btn = pickBtnObj.GetComponent<Button>();
-                if (btn != null)
-                {
-                    btn.onClick.Invoke();
-                    return;
-                }
+                inventoryManager.AddItem(rock);
             }
-
-            Debug.Log("[JbelHUD] Collect action triggered.");
         }
 
         private void OnBagClicked()
         {
+            var samples = JbelIghoud.UI.JbelSamplesInventoryModal.Instance;
+            if (samples != null) { samples.ToggleInventory(); return; }
             // Open Inventory Satchel
             InventoryUI invUI = InventoryUI.Instance;
             if (invUI != null)
@@ -260,6 +290,8 @@ namespace JbelIghoud.UI
         private void OnMapClicked()
         {
             Debug.Log("[JbelHUD] Map button clicked.");
+            var map = JbelIghoud.UI.JbelMapMenuController.Instance;
+            if (map != null) map.ToggleMap();
         }
 
         private void OnPlusClicked()

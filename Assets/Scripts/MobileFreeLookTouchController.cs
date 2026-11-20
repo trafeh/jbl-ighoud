@@ -74,6 +74,7 @@ public class MobileFreeLookTouchController : MonoBehaviour
         }
 
         FindPlayerReference();
+        isInputDisabled = false;
     }
 
     private void FindPlayerReference()
@@ -119,6 +120,7 @@ public class MobileFreeLookTouchController : MonoBehaviour
         if (RockDragManager.Instance != null && RockDragManager.Instance.IsInSmashMode) return;
 
         FindPlayerReference();
+        isInputDisabled = false;
         HandleTouchInput();
         HandleMouseEditorFallback();
         HandleAutoAlignment();
